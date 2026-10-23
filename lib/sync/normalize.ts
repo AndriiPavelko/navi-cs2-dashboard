@@ -1,9 +1,10 @@
 import { tierLabel } from "../format";
+import { NAVI, type TeamProfile } from "../teams";
 import type { MapSample, RecordLine } from "../winband";
 import {
   asArray,
   isFinished,
-  isNaviSide,
+  isTrackedSide,
   readKillDeath,
   sameSide,
   type RawGame,
@@ -92,12 +93,14 @@ function mapScores(game: RawGame, naviIndex: number): { navi: number | null; opp
   return { navi: null, opp: null };
 }
 
-export function normalizeMatch(raw: RawMatch): StoredSeries | null {
+export function normalizeMatch(raw: RawMatch, team: TeamProfile = NAVI): StoredSeries | null {
   const id = clean(raw.match2id);
   const when = clean(raw.date);
   if (!id || !when) return null;
   const opponents = asArray<RawOpponent>(raw.match2opponents);
-  const naviIndex = opponents.findIndex((opponent) => isNaviSide(opponent));
+  const naviIndex = opponents.findIndex((opponent) =>
+    isTrackedSide(opponent, team.name, team.templatePrefix),
+  );
   if (naviIndex < 0) return null;
   const opponent = opponents.find((side, index) => index !== naviIndex);
   if (!opponent || !clean(opponent.name)) return null;
@@ -125,7 +128,7 @@ export function normalizeMatch(raw: RawMatch): StoredSeries | null {
     }
     const gameId = game.match2gameid ?? index + 1;
     return {
-      id: `${id}-${gameId}`,
+      id: team.id === "navi" ? `${id}-${gameId}` : `${team.id}:${id}-${gameId}`,
       mapName: clean(game.map) || `Карта ${index + 1}`,
       naviScore: scores.navi,
       opponentScore: scores.opp,

@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { ensureSchema, getPool } from "../db";
 import { computeDistanceBand, lengthFromRaw, lengthFromScores } from "../distance";
+import { TEAM_LIST, type TeamId, type TeamProfile } from "../teams";
 import { computeWinBand, type RecordLine } from "../winband";
 import {
   fetchPlayers,
@@ -62,6 +63,7 @@ type Band = { low: number; high: number; reasons: string[] };
 function withBands(
   series: StoredSeries[],
   forms: Record<string, RawMatch[]>,
+  label: string,
 ): Map<string, { win: Band; distance: Band | null }> {
   const bands = new Map<string, { win: Band; distance: Band | null }>();
   for (const item of series) {
@@ -92,6 +94,7 @@ function withBands(
       item.bestOf === 3
         ? computeDistanceBand({
             opponent: item.opponentName,
+            label,
             navi: lengthFromScores(
               naviBo3.map((other) => ({
                 bestOf: other.bestOf,
@@ -113,6 +116,7 @@ function withBands(
     bands.set(item.id, {
       win: computeWinBand({
         opponent: item.opponentName,
+        label,
         navi: lineOf(prior),
         opponentForm: recordFromRaw(history, side),
         h2h: lineOf(h2hSeries),
@@ -158,6 +162,7 @@ function mergeRoster(squad: SquadPerson[], people: RawPerson[]): PlayerRow[] {
 
 async function writeAll(
   client: PoolClient,
+  team: TeamId,
   series: StoredSeries[],
   bands: Map<string, { win: Band; distance: Band | null }>,
   roster: PlayerRow[],
@@ -169,17 +174,17 @@ async function writeAll(
       const band = bands.get(item.id);
       await client.query(
         `INSERT INTO series (
-           id, played_at, tournament, section, tier, event_type, best_of, page_name,
+           team, id, played_at, tournament, section, tier, event_type, best_of, page_name,
            opponent_name, opponent_template, navi_score, opponent_score, navi_won, finished,
            navi_players, opponent_players, win_low, win_high, win_reasons,
            maps_low, maps_high, maps_reasons, updated_at
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,
-           $9,$10,$11,$12,$13,$14,
-           $15::jsonb,$16::jsonb,$17,$18,$19::jsonb,
-           $20,$21,$22::jsonb,NOW()
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,
+           $10,$11,$12,$13,$14,$15,
+           $16::jsonb,$17::jsonb,$18,$19,$20::jsonb,
+           $21,$22,$23::jsonb,NOW()
          )
-         ON CONFLICT (id) DO UPDATE SET
+         ON CONFLICT (team, id) DO UPDATE SET
            played_at = EXCLUDED.played_at,
            tournament = EXCLUDED.tournament,
            section = EXCLUDED.section,
@@ -203,6 +208,7 @@ async function writeAll(
            maps_reasons = EXCLUDED.maps_reasons,
            updated_at = NOW()`,
         [
+          team,
           item.id,
           item.at.toISOString(),
           item.tournament,
@@ -230,27 +236,27 @@ async function writeAll(
     }
 
     const ids = series.map((item) => item.id);
-    await client.query("DELETE FROM maps WHERE series_id = ANY($1::text[])", [ids]);
+    await client.query("DELETE FROM maps WHERE team = $1 AND series_id = ANY($2::text[])", [team, ids]);
     for (const item of series) {
       for (const map of item.maps) {
         await client.query(
-          `INSERT INTO maps (id, series_id, map_name, navi_score, opponent_score, navi_won, vod, position)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [map.id, item.id, map.mapName, map.naviScore, map.opponentScore, map.naviWon, map.vod, map.position],
+          `INSERT INTO maps (team, id, series_id, map_name, navi_score, opponent_score, navi_won, vod, position)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [team, map.id, item.id, map.mapName, map.naviScore, map.opponentScore, map.naviWon, map.vod, map.position],
         );
       }
     }
     await client.query(
-      "DELETE FROM series WHERE played_at >= $1 AND NOT (id = ANY($2::text[]))",
-      [YEAR_START.toISOString(), ids],
+      "DELETE FROM series WHERE team = $1 AND played_at >= $2 AND NOT (id = ANY($3::text[]))",
+      [team, YEAR_START.toISOString(), ids],
     );
 
     for (const player of roster) {
       await client.query(
         `INSERT INTO players (
-           id, nickname, real_name, country, role, is_coach, join_date, sort_order, active, liquipedia_url, updated_at
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9,NOW())
-         ON CONFLICT (id) DO UPDATE SET
+           team, id, nickname, real_name, country, role, is_coach, join_date, sort_order, active, liquipedia_url, updated_at
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,$10,NOW())
+         ON CONFLICT (team, id) DO UPDATE SET
            nickname = EXCLUDED.nickname,
            real_name = EXCLUDED.real_name,
            country = EXCLUDED.country,
@@ -262,6 +268,7 @@ async function writeAll(
            liquipedia_url = EXCLUDED.liquipedia_url,
            updated_at = NOW()`,
         [
+          team,
           player.id,
           player.nickname,
           player.realName,
@@ -274,15 +281,17 @@ async function writeAll(
         ],
       );
     }
-    await client.query("UPDATE players SET active = FALSE, updated_at = NOW() WHERE NOT (id = ANY($1::text[]))", [
-      roster.map((player) => player.id),
-    ]);
+    await client.query(
+      "UPDATE players SET active = FALSE, updated_at = NOW() WHERE team = $1 AND NOT (id = ANY($2::text[]))",
+      [team, roster.map((player) => player.id)],
+    );
 
     for (const post of posts) {
       await client.query(
-        `INSERT INTO posts (id, source, author, title, body, url, published_at, tone, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+        `INSERT INTO posts (team, id, source, author, title, body, url, published_at, tone, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
          ON CONFLICT (id) DO UPDATE SET
+           team = EXCLUDED.team,
            source = EXCLUDED.source,
            author = EXCLUDED.author,
            title = EXCLUDED.title,
@@ -291,7 +300,7 @@ async function writeAll(
            published_at = EXCLUDED.published_at,
            tone = EXCLUDED.tone,
            updated_at = NOW()`,
-        [post.id, post.source, post.author, post.title, post.body, post.url, post.publishedAt, post.tone],
+        [team, post.id, post.source, post.author, post.title, post.body, post.url, post.publishedAt, post.tone],
       );
     }
 
@@ -302,10 +311,10 @@ async function writeAll(
   }
 }
 
-async function collectPosts(wiki: string, roster: PlayerRow[]): Promise<PostDraft[]> {
+async function collectPosts(team: TeamProfile, wiki: string, roster: PlayerRow[]): Promise<PostDraft[]> {
   const channels = new Set<string>();
   for (const slug of telegramSlugsFromWiki(wiki)) channels.add(slug);
-  const titles = ["Natus Vincere", ...roster.map((player) => player.id)];
+  const titles = [team.page, ...roster.map((player) => player.id)];
   const linked = await fetchTelegramLinks(titles);
   for (const slugs of linked.values()) {
     for (const slug of slugs) channels.add(slug);
@@ -343,32 +352,42 @@ export async function runSync(): Promise<SyncSummary> {
     await ensureSchema(client);
 
     const newsPromise = fetchNaviNews();
-    const bundle = await fetchSeasonBundle();
-    let wiki = bundle.wiki;
-    if (!wiki.includes("==Player Roster==")) wiki = await fetchTeamWiki();
-    const squad = parseActiveRoster(wiki);
-    if (!squad.length) throw new Error("Liquipedia не віддала активний склад");
-
-    const people = await fetchPlayers(squad.map((person) => person.id));
-    const roster = mergeRoster(squad, people);
-    const series = bundle.matches
-      .map((match) => normalizeMatch(match))
-      .filter((match): match is StoredSeries => Boolean(match))
-      .sort((a, b) => a.at.getTime() - b.at.getTime());
-    if (!series.length) throw new Error("Liquipedia не віддала матчі сезону 2026");
-
-    const bands = withBands(series, bundle.forms);
-    const posts = [...(await newsPromise), ...(await collectPosts(wiki, roster))];
-
-    await writeAll(client, series, bands, roster, posts);
     const summary: SyncSummary = {
-      matches: series.length,
-      upcoming: series.filter((item) => !item.finished).length,
-      roster: roster.length,
-      maps: series.reduce((sum, item) => sum + item.maps.length, 0),
-      posts: posts.length,
-      opponents: [...new Set(series.filter((item) => !item.finished).map((item) => item.opponentName))],
+      matches: 0,
+      upcoming: 0,
+      roster: 0,
+      maps: 0,
+      posts: 0,
+      opponents: [],
     };
+    for (const team of TEAM_LIST) {
+      const bundle = await fetchSeasonBundle(team);
+      let wiki = bundle.wiki;
+      if (!wiki.includes("==Player Roster==")) wiki = await fetchTeamWiki(team);
+      const squad = parseActiveRoster(wiki);
+      if (!squad.length) throw new Error(`Liquipedia не віддала активний склад ${team.label}`);
+
+      const people = await fetchPlayers(squad.map((person) => person.id));
+      const roster = mergeRoster(squad, people);
+      const series = bundle.matches
+        .map((match) => normalizeMatch(match, team))
+        .filter((match): match is StoredSeries => Boolean(match))
+        .sort((a, b) => a.at.getTime() - b.at.getTime());
+      if (!series.length) throw new Error(`Liquipedia не віддала матчі ${team.label} за 2026`);
+
+      const bands = withBands(series, bundle.forms, team.label);
+      const news = team.id === "navi" ? await newsPromise : [];
+      const posts = [...news, ...(await collectPosts(team, wiki, roster))];
+      await writeAll(client, team.id, series, bands, roster, posts);
+      summary.matches += series.length;
+      summary.upcoming += series.filter((item) => !item.finished).length;
+      summary.roster += roster.length;
+      summary.maps += series.reduce((sum, item) => sum + item.maps.length, 0);
+      summary.posts += posts.length;
+      summary.opponents.push(
+        ...series.filter((item) => !item.finished).map((item) => `${team.label}: ${item.opponentName}`),
+      );
+    }
     await client.query(
       "INSERT INTO sync_runs (finished_at, ok, summary) VALUES (NOW(), TRUE, $1::jsonb)",
       [JSON.stringify(summary)],

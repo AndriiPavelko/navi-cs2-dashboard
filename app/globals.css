@@ -69,6 +69,17 @@ h1, .hero h1, .hero h2, .brand, .stats dd, .countdown, .score-nums b {
   border: 1.5px solid var(--ink);
   padding: 0 3px 1px;
 }
+.switch { display: flex; gap: 6px; margin-top: 8px; }
+.switch a {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1.5px solid var(--ink);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.switch a.on { background: var(--yellow); }
 .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .synced { color: var(--muted); font-size: 12px; }
 .refresh-btn, .tabbar a, .rows a, .roster a, .feed a {

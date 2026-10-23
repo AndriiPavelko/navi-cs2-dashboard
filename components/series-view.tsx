@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Countdown } from "@/components/countdown";
 import { distanceHeadline } from "@/lib/distance";
 import { bandText, berlinClock, berlinLong, dateBadge, pillsFor, wikiUrl } from "@/lib/format";
+import { matchHref, TEAMS } from "@/lib/teams";
 import { winDisclaimer } from "@/lib/winband";
 import type { SeriesVM } from "@/lib/types";
 
@@ -15,7 +16,7 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
         <p className="clock">{berlinClock(series.at)}</p>
       </div>
       <p className="event">{series.eventLabel}</p>
-      <p className="versus">NAVI проти</p>
+      <p className="versus">{TEAMS[series.team].label} проти</p>
       <Title>{series.opponent}</Title>
       <ul className="pills">
         {pills.map((pill) => (
@@ -51,7 +52,7 @@ export function Score({ series }: { series: SeriesVM }) {
       <div className="score-nums">
         <div>
           <b>{series.naviScore ?? "–"}</b>
-          <span>NAVI</span>
+          <span>{TEAMS[series.team].label}</span>
         </div>
         <i>:</i>
         <div>
@@ -124,7 +125,7 @@ export function SeriesList({ title, items }: { title: string; items: SeriesVM[] 
       <ul className="rows">
         {items.map((series) => (
           <li key={series.id}>
-            <Link href={`/matches/${series.id}`}>
+            <Link href={matchHref(series.team, series.id)}>
               <span className="row-when">{dateBadge(series.at)}</span>
               <span className="row-main">
                 <strong>{series.opponent}</strong>

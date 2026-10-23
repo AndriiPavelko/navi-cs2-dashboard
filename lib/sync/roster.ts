@@ -68,8 +68,9 @@ export function parseActiveRoster(wikitext: string): SquadPerson[] {
     : roster;
   const activeAt = cs2.search(/===Active===/);
   if (activeAt < 0) return [];
-  const formerAt = cs2.indexOf("===Former===", activeAt);
-  const active = cs2.slice(activeAt, formerAt > activeAt ? formerAt : undefined);
+  const rest = cs2.slice(activeAt + "===Active===".length);
+  const nextHeading = rest.search(/\n===[A-Za-z]/);
+  const active = nextHeading >= 0 ? rest.slice(0, nextHeading) : rest.split("===Former===")[0];
   const people: SquadPerson[] = [];
   const pattern = /\{\{Person\|(.*?)\}\}/gs;
   let match: RegExpExecArray | null;

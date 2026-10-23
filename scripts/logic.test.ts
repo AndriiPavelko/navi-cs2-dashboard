@@ -8,6 +8,7 @@ import { readKillDeath } from "../lib/sync/raw";
 import { parseActiveRoster } from "../lib/sync/roster";
 import { parseTelegram } from "../lib/sync/posts";
 import { telegramSlug } from "../lib/sync/liquipedia";
+import { teamFromPath, teamHref } from "../lib/teams";
 
 const rosterWiki = `
 ==Player Roster==
@@ -133,5 +134,10 @@ assert.equal(posts.length, 1);
 assert.equal(posts[0].author, "Natus Vincere");
 assert.equal(posts[0].tone, "зібрано");
 assert.equal(posts[0].url, "https://t.me/natus_vincere_official/1");
+
+assert.equal(teamFromPath("/faze/matches/abc"), "faze");
+assert.equal(teamFromPath("/matches/abc"), "navi");
+assert.equal(teamHref("faze", "/players"), "/faze/players");
+assert.equal(teamHref("navi", "/pulse"), "/pulse");
 
 console.log("logic tests ok");

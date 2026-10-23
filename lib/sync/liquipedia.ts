@@ -1,3 +1,5 @@
+import type { TeamProfile } from "../teams";
+import { NAVI } from "../teams";
 import type { RawMatch, RawPerson } from "./raw";
 
 const API = "https://liquipedia.net/counterstrike/api.php";
@@ -66,11 +68,12 @@ async function runLua(question: string): Promise<unknown> {
   return JSON.parse(returned) as unknown;
 }
 
-const SEASON_LUA = `= (function()
+function seasonLua(team: TeamProfile): string {
+  return `= (function()
   local lpdb = mw.ext.LiquipediaDB.lpdb
   local ok, res = pcall(function()
     local matches = lpdb("match2", {
-      conditions = [=[ [[date::>2025-12-31]] AND [[opponent::Natus Vincere]] ]=],
+      conditions = [=[ [[date::>2025-12-31]] AND [[opponent::${team.page}]] ]=],
       query = "match2id, pagename, date, winner, tournament, section, bestof, finished, type, liquipediatier, liquipediatiertype, vod, match2opponents, match2games",
       limit = 500,
       order = "date asc",
@@ -82,7 +85,7 @@ const SEASON_LUA = `= (function()
           local name = o.name or ""
           local template = (o.template or ""):lower()
           local lower = name:lower()
-          if name ~= "" and lower ~= "natus vincere" and not template:find("^natus vincere") then
+          if name ~= "" and lower ~= "${team.name}" and not template:find("^${team.templatePrefix}") then
             wanted[name] = true
           end
         end
@@ -101,7 +104,7 @@ const SEASON_LUA = `= (function()
     end
     local wiki = ""
     local okWiki, content = pcall(function()
-      local title = mw.title.new("Natus Vincere")
+      local title = mw.title.new("${team.page}")
       if not title then return "" end
       return title:getContent() or ""
     end)
@@ -111,6 +114,7 @@ const SEASON_LUA = `= (function()
   if not ok then return "ERR " .. tostring(res) end
   return mw.text.jsonEncode(res)
 end)()`;
+}
 
 export type SeasonBundle = {
   matches: RawMatch[];
@@ -118,8 +122,8 @@ export type SeasonBundle = {
   wiki: string;
 };
 
-export async function fetchSeasonBundle(): Promise<SeasonBundle> {
-  const parsed = (await runLua(SEASON_LUA)) as SeasonBundle;
+export async function fetchSeasonBundle(team: TeamProfile = NAVI): Promise<SeasonBundle> {
+  const parsed = (await runLua(seasonLua(team))) as SeasonBundle;
   if (!Array.isArray(parsed.matches)) {
     throw new Error("Liquipedia не повернула серії");
   }
@@ -130,7 +134,7 @@ export async function fetchSeasonBundle(): Promise<SeasonBundle> {
   };
 }
 
-export async function fetchTeamWiki(): Promise<string> {
+export async function fetchTeamWiki(team: TeamProfile = NAVI): Promise<string> {
   const data = await mediawiki({
     action: "query",
     format: "json",
@@ -138,7 +142,7 @@ export async function fetchTeamWiki(): Promise<string> {
     prop: "revisions",
     rvprop: "content",
     rvslots: "main",
-    titles: "Natus Vincere",
+    titles: team.page,
   });
   const page = (data.query?.pages ?? [])[0];
   return page?.revisions?.[0]?.slots?.main?.content ?? "";

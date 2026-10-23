@@ -56,10 +56,14 @@ export function asArray<T>(value: unknown): T[] {
   return [];
 }
 
-export function isNaviSide(opponent: RawOpponent): boolean {
-  const name = (opponent.name || "").toLowerCase();
+export function isTrackedSide(opponent: RawOpponent, name: string, templatePrefix: string): boolean {
+  const sideName = (opponent.name || "").toLowerCase();
   const template = (opponent.template || "").toLowerCase();
-  return name === "natus vincere" || template.startsWith("natus vincere");
+  return sideName === name || template.startsWith(templatePrefix);
+}
+
+export function isNaviSide(opponent: RawOpponent): boolean {
+  return isTrackedSide(opponent, "natus vincere", "natus vincere");
 }
 
 export function isFinished(match: RawMatch): boolean {

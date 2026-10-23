@@ -1,9 +1,11 @@
 import { cache } from "react";
 import { query } from "./db";
 import { eventLabel } from "./format";
+import type { TeamId } from "./teams";
 import type { MapVM, PersonInMatch, PlayerVM, PostVM, SeriesVM } from "./types";
 
 type SeriesRow = {
+  team: TeamId;
   id: string;
   played_at: Date;
   tournament: string;
@@ -49,10 +51,10 @@ function people(value: PersonInMatch[] | null): PersonInMatch[] {
   }));
 }
 
-export const getAllSeries = cache(async (): Promise<SeriesVM[]> => {
+export const getAllSeries = cache(async (team: TeamId): Promise<SeriesVM[]> => {
   const [series, maps] = await Promise.all([
-    query<SeriesRow>("SELECT * FROM series ORDER BY played_at DESC"),
-    query<MapRow>("SELECT * FROM maps ORDER BY position ASC"),
+    query<SeriesRow>("SELECT * FROM series WHERE team = $1 ORDER BY played_at DESC", [team]),
+    query<MapRow>("SELECT * FROM maps WHERE team = $1 ORDER BY position ASC", [team]),
   ]);
   const bySeries = new Map<string, MapVM[]>();
   for (const map of maps) {
@@ -68,6 +70,7 @@ export const getAllSeries = cache(async (): Promise<SeriesVM[]> => {
     bySeries.set(map.series_id, list);
   }
   return series.map((row) => ({
+    team: row.team,
     id: row.id,
     at: new Date(row.played_at).toISOString(),
     tournament: row.tournament,
@@ -94,7 +97,7 @@ export const getAllSeries = cache(async (): Promise<SeriesVM[]> => {
   }));
 });
 
-export const getPlayers = cache(async (): Promise<PlayerVM[]> => {
+export const getPlayers = cache(async (team: TeamId): Promise<PlayerVM[]> => {
   const rows = await query<{
     id: string;
     nickname: string;
@@ -104,7 +107,7 @@ export const getPlayers = cache(async (): Promise<PlayerVM[]> => {
     is_coach: boolean;
     join_date: Date | string | null;
     liquipedia_url: string | null;
-  }>("SELECT * FROM players WHERE active = TRUE ORDER BY is_coach ASC, sort_order ASC, nickname ASC");
+  }>("SELECT * FROM players WHERE team = $1 AND active = TRUE ORDER BY is_coach ASC, sort_order ASC, nickname ASC", [team]);
   return rows.map((row) => ({
     id: row.id,
     nickname: row.nickname,
@@ -117,7 +120,7 @@ export const getPlayers = cache(async (): Promise<PlayerVM[]> => {
   }));
 });
 
-export const getPosts = cache(async (): Promise<PostVM[]> => {
+export const getPosts = cache(async (team: TeamId): Promise<PostVM[]> => {
   const rows = await query<{
     id: string;
     source: string;
@@ -127,7 +130,7 @@ export const getPosts = cache(async (): Promise<PostVM[]> => {
     url: string;
     published_at: Date | null;
     tone: PostVM["tone"];
-  }>("SELECT * FROM posts ORDER BY published_at DESC NULLS LAST LIMIT 40");
+  }>("SELECT * FROM posts WHERE team = $1 ORDER BY published_at DESC NULLS LAST LIMIT 40", [team]);
   return rows.map((row) => ({
     id: row.id,
     source: row.source,

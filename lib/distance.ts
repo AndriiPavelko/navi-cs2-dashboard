@@ -86,10 +86,12 @@ function played(sample: LengthSample): number {
 
 export function computeDistanceBand(input: {
   opponent: string;
+  label?: string;
   navi: LengthSample;
   opponentForm: LengthSample;
   h2h: LengthSample;
 }): DistanceBand | null {
+  const label = input.label ?? "NAVI";
   const parts: { rate: number; weight: number }[] = [];
   const reasons: string[] = [];
   const naviN = played(input.navi);
@@ -98,7 +100,7 @@ export function computeDistanceBand(input: {
 
   if (naviN >= 4) {
     parts.push({ rate: input.navi.three / naviN, weight: Math.min(naviN, 10) });
-    reasons.push(`Останні BO3 NAVI: ${input.navi.three} з ${naviN} до третьої карти`);
+    reasons.push(`Останні BO3 ${label}: ${input.navi.three} з ${naviN} до третьої карти`);
   }
   if (oppN >= 4) {
     parts.push({ rate: input.opponentForm.three / oppN, weight: Math.min(oppN, 10) });

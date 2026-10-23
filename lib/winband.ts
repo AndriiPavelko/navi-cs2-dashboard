@@ -46,12 +46,14 @@ function pct(rate: number): string {
 
 export function computeWinBand(input: {
   opponent: string;
+  label?: string;
   navi: RecordLine;
   opponentForm: RecordLine;
   h2h: RecordLine;
   naviMaps: MapSample[];
   oppMaps: MapSample[];
 }): WinBand {
+  const label = input.label ?? "NAVI";
   const naviN = played(input.navi);
   const oppN = played(input.opponentForm);
   let formDelta = 0;
@@ -60,7 +62,7 @@ export function computeWinBand(input: {
   if (naviN > 0 && oppN > 0) {
     formDelta = (winRate(input.navi) - winRate(input.opponentForm)) * 18;
     reasons.push(
-      `Форма: NAVI ${line(input.navi)} з ${naviN}, ${input.opponent} ${line(input.opponentForm)} з ${oppN}`,
+      `Форма: ${label} ${line(input.navi)} з ${naviN}, ${input.opponent} ${line(input.opponentForm)} з ${oppN}`,
     );
   } else if (naviN > 0 && oppN === 0) {
     reasons.push("Форму суперника у відкритих серіях зараз не видно");
@@ -100,9 +102,9 @@ export function computeWinBand(input: {
     const oppPct = pct(oppMapWins / oppMapGames);
     const gap = naviMapWins / naviMapGames - oppMapWins / oppMapGames;
     if (gap > 0.04) {
-      reasons.push(`На спільних картах NAVI ${naviPct}, ${input.opponent} ${oppPct}`);
+      reasons.push(`На спільних картах ${label} ${naviPct}, ${input.opponent} ${oppPct}`);
     } else if (gap < -0.04) {
-      reasons.push(`На спільних картах ${input.opponent} ${oppPct}, NAVI ${naviPct}`);
+      reasons.push(`На спільних картах ${input.opponent} ${oppPct}, ${label} ${naviPct}`);
     } else {
       reasons.push(`На спільних картах сили майже рівні: ${naviPct} і ${oppPct}`);
     }

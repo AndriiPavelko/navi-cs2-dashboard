@@ -16,6 +16,7 @@ export type MapVM = {
 };
 
 export type SeriesVM = {
+  team: "navi" | "faze";
   id: string;
   at: string;
   tournament: string;

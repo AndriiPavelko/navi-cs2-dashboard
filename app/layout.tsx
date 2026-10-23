@@ -18,8 +18,8 @@ const display = Unbounded({
 });
 
 export const metadata: Metadata = {
-  title: "NAVI CS2",
-  description: "Мобільний дашборд NAVI CS2: сезон 2026, шанс серії і пульс публічних дописів.",
+  title: "NAVI · FaZe CS2",
+  description: "Мобільний дашборд NAVI і FaZe CS2: сезон 2026, шанс серії і пульс публічних дописів.",
 };
 
 export const viewport: Viewport = {

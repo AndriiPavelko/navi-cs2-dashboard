@@ -101,6 +101,33 @@ CREATE INDEX IF NOT EXISTS posts_published_idx ON posts (published_at DESC);
 ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_low INTEGER;
 ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_high INTEGER;
 ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_reasons JSONB;
+
+ALTER TABLE series ADD COLUMN IF NOT EXISTS team TEXT NOT NULL DEFAULT 'navi';
+ALTER TABLE maps ADD COLUMN IF NOT EXISTS team TEXT NOT NULL DEFAULT 'navi';
+ALTER TABLE players ADD COLUMN IF NOT EXISTS team TEXT NOT NULL DEFAULT 'navi';
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS team TEXT NOT NULL DEFAULT 'navi';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'series_pkey' AND pg_get_constraintdef(oid) LIKE '%team%'
+  ) THEN
+    ALTER TABLE maps DROP CONSTRAINT IF EXISTS maps_series_id_fkey;
+    ALTER TABLE series DROP CONSTRAINT IF EXISTS series_pkey;
+    ALTER TABLE series ADD PRIMARY KEY (team, id);
+    ALTER TABLE maps ADD CONSTRAINT maps_series_id_fkey
+      FOREIGN KEY (team, series_id) REFERENCES series (team, id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'players_pkey' AND pg_get_constraintdef(oid) LIKE '%team%'
+  ) THEN
+    ALTER TABLE players DROP CONSTRAINT IF EXISTS players_pkey;
+    ALTER TABLE players ADD PRIMARY KEY (team, id);
+  END IF;
+END $$;
 `;
 
 export async function ensureSchema(client?: PoolClient): Promise<void> {
