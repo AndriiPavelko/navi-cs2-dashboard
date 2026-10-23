@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { ensureSchema, getPool } from "../db";
+import { computeDistanceBand, lengthFromRaw, lengthFromScores } from "../distance";
 import { computeWinBand, type RecordLine } from "../winband";
 import {
   fetchPlayers,
@@ -56,8 +57,13 @@ function formRows(forms: Record<string, RawMatch[]>, name: string): RawMatch[] {
   return key ? asArray<RawMatch>(forms[key]) : [];
 }
 
-function withBands(series: StoredSeries[], forms: Record<string, RawMatch[]>): Map<string, { low: number; high: number; reasons: string[] }> {
-  const bands = new Map<string, { low: number; high: number; reasons: string[] }>();
+type Band = { low: number; high: number; reasons: string[] };
+
+function withBands(
+  series: StoredSeries[],
+  forms: Record<string, RawMatch[]>,
+): Map<string, { win: Band; distance: Band | null }> {
+  const bands = new Map<string, { win: Band; distance: Band | null }>();
   for (const item of series) {
     if (item.finished) continue;
     const prior = series
@@ -76,9 +82,36 @@ function withBands(series: StoredSeries[], forms: Record<string, RawMatch[]>): M
     const seasonMaps = mapsFromSeries(
       series.filter((other) => other.finished && other.at >= YEAR_START && other.at < item.at),
     );
-    bands.set(
-      item.id,
-      computeWinBand({
+    const naviBo3 = series
+      .filter((other) => other.finished && other.at < item.at && other.bestOf === 3)
+      .sort((a, b) => b.at.getTime() - a.at.getTime());
+    const h2hBo3 = h2hSeries
+      .filter((other) => other.bestOf === 3)
+      .sort((a, b) => b.at.getTime() - a.at.getTime());
+    const distance =
+      item.bestOf === 3
+        ? computeDistanceBand({
+            opponent: item.opponentName,
+            navi: lengthFromScores(
+              naviBo3.map((other) => ({
+                bestOf: other.bestOf,
+                left: other.naviScore,
+                right: other.opponentScore,
+              })),
+            ),
+            opponentForm: lengthFromRaw(history),
+            h2h: lengthFromScores(
+              h2hBo3.map((other) => ({
+                bestOf: other.bestOf,
+                left: other.naviScore,
+                right: other.opponentScore,
+              })),
+              20,
+            ),
+          })
+        : null;
+    bands.set(item.id, {
+      win: computeWinBand({
         opponent: item.opponentName,
         navi: lineOf(prior),
         opponentForm: recordFromRaw(history, side),
@@ -86,7 +119,8 @@ function withBands(series: StoredSeries[], forms: Record<string, RawMatch[]>): M
         naviMaps: seasonMaps,
         oppMaps: mapsFromRaw(history, side),
       }),
-    );
+      distance,
+    });
   }
   return bands;
 }
@@ -125,7 +159,7 @@ function mergeRoster(squad: SquadPerson[], people: RawPerson[]): PlayerRow[] {
 async function writeAll(
   client: PoolClient,
   series: StoredSeries[],
-  bands: Map<string, { low: number; high: number; reasons: string[] }>,
+  bands: Map<string, { win: Band; distance: Band | null }>,
   roster: PlayerRow[],
   posts: PostDraft[],
 ): Promise<void> {
@@ -137,11 +171,13 @@ async function writeAll(
         `INSERT INTO series (
            id, played_at, tournament, section, tier, event_type, best_of, page_name,
            opponent_name, opponent_template, navi_score, opponent_score, navi_won, finished,
-           navi_players, opponent_players, win_low, win_high, win_reasons, updated_at
+           navi_players, opponent_players, win_low, win_high, win_reasons,
+           maps_low, maps_high, maps_reasons, updated_at
          ) VALUES (
            $1,$2,$3,$4,$5,$6,$7,$8,
            $9,$10,$11,$12,$13,$14,
-           $15::jsonb,$16::jsonb,$17,$18,$19::jsonb,NOW()
+           $15::jsonb,$16::jsonb,$17,$18,$19::jsonb,
+           $20,$21,$22::jsonb,NOW()
          )
          ON CONFLICT (id) DO UPDATE SET
            played_at = EXCLUDED.played_at,
@@ -162,6 +198,9 @@ async function writeAll(
            win_low = EXCLUDED.win_low,
            win_high = EXCLUDED.win_high,
            win_reasons = EXCLUDED.win_reasons,
+           maps_low = EXCLUDED.maps_low,
+           maps_high = EXCLUDED.maps_high,
+           maps_reasons = EXCLUDED.maps_reasons,
            updated_at = NOW()`,
         [
           item.id,
@@ -180,9 +219,12 @@ async function writeAll(
           item.finished,
           JSON.stringify(item.naviPlayers),
           JSON.stringify(item.opponentPlayers),
-          band?.low ?? null,
-          band?.high ?? null,
-          band ? JSON.stringify(band.reasons) : null,
+          band?.win.low ?? null,
+          band?.win.high ?? null,
+          band ? JSON.stringify(band.win.reasons) : null,
+          band?.distance?.low ?? null,
+          band?.distance?.high ?? null,
+          band?.distance ? JSON.stringify(band.distance.reasons) : null,
         ],
       );
     }

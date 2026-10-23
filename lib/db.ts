@@ -97,6 +97,10 @@ CREATE TABLE IF NOT EXISTS sync_runs (
 CREATE INDEX IF NOT EXISTS series_played_idx ON series (played_at DESC);
 CREATE INDEX IF NOT EXISTS maps_series_idx ON maps (series_id, position);
 CREATE INDEX IF NOT EXISTS posts_published_idx ON posts (published_at DESC);
+
+ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_low INTEGER;
+ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_high INTEGER;
+ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_reasons JSONB;
 `;
 
 export async function ensureSchema(client?: PoolClient): Promise<void> {

@@ -33,6 +33,9 @@ export type SeriesVM = {
   winLow: number | null;
   winHigh: number | null;
   reasons: string[];
+  mapsLow: number | null;
+  mapsHigh: number | null;
+  mapReasons: string[];
   naviPlayers: PersonInMatch[];
   oppPlayers: PersonInMatch[];
   maps: MapVM[];

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Countdown } from "@/components/countdown";
+import { distanceHeadline } from "@/lib/distance";
 import { bandText, berlinClock, berlinLong, dateBadge, pillsFor, wikiUrl } from "@/lib/format";
 import { winDisclaimer } from "@/lib/winband";
 import type { SeriesVM } from "@/lib/types";
@@ -22,13 +23,20 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
         ))}
       </ul>
       {series.finished ? (
-        <Score series={series} />
+        <>
+          <Score series={series} />
+          {seriesLengthFact(series) ? <p className="note">{seriesLengthFact(series)}</p> : null}
+        </>
       ) : (
         <>
           <Countdown iso={series.at} />
           {series.winLow != null && series.winHigh != null ? (
             <WinBand low={series.winLow} high={series.winHigh} reasons={series.reasons} />
           ) : null}
+          {series.bestOf === 3 && series.mapsLow != null && series.mapsHigh != null ? (
+            <MapDistance low={series.mapsLow} high={series.mapsHigh} reasons={series.mapReasons} />
+          ) : null}
+          {series.winLow != null || series.mapsLow != null ? <p className="disclaimer">{winDisclaimer()}</p> : null}
         </>
       )}
     </article>
@@ -72,9 +80,40 @@ export function WinBand({ low, high, reasons }: { low: number; high: number; rea
           ))}
         </ul>
       ) : null}
-      <p className="disclaimer">{winDisclaimer()}</p>
     </div>
   );
+}
+
+export function MapDistance({ low, high, reasons }: { low: number; high: number; reasons: string[] }) {
+  return (
+    <div className="band">
+      <p className="lean">{distanceHeadline(low, high)}</p>
+      <div className="band-top">
+        <span>Третя карта</span>
+        <strong>{bandText(low, high)}</strong>
+      </div>
+      <div className="track" aria-hidden="true">
+        <i style={{ left: `${low}%`, width: `${Math.max(high - low, 1)}%` }} />
+      </div>
+      {reasons.length ? (
+        <ul className="reasons">
+          {reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+export function seriesLengthFact(series: SeriesVM): string | null {
+  if (!series.finished || series.bestOf !== 3) return null;
+  if (series.naviScore == null || series.oppScore == null) return null;
+  const high = Math.max(series.naviScore, series.oppScore);
+  const low = Math.min(series.naviScore, series.oppScore);
+  if (high === 2 && low === 1) return "Серія дійшла до третьої карти.";
+  if (high === 2 && low === 0) return "Серія закінчилась за дві карти.";
+  return null;
 }
 
 export function SeriesList({ title, items }: { title: string; items: SeriesVM[] }) {

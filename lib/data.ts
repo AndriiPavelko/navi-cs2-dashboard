@@ -22,6 +22,9 @@ type SeriesRow = {
   win_low: number | null;
   win_high: number | null;
   win_reasons: string[] | null;
+  maps_low: number | null;
+  maps_high: number | null;
+  maps_reasons: string[] | null;
 };
 
 type MapRow = {
@@ -82,6 +85,9 @@ export const getAllSeries = cache(async (): Promise<SeriesVM[]> => {
     winLow: row.win_low,
     winHigh: row.win_high,
     reasons: Array.isArray(row.win_reasons) ? row.win_reasons : [],
+    mapsLow: row.maps_low,
+    mapsHigh: row.maps_high,
+    mapReasons: Array.isArray(row.maps_reasons) ? row.maps_reasons : [],
     naviPlayers: people(row.navi_players),
     oppPlayers: people(row.opponent_players),
     maps: bySeries.get(row.id) ?? [],

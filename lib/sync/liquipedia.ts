@@ -93,7 +93,7 @@ const SEASON_LUA = `= (function()
       if not name:find("[%[%]]") and not name:find('"') then
         forms[name] = lpdb("match2", {
           conditions = "[[opponent::" .. name .. "]] AND [[finished::1]]",
-          query = "match2id, date, winner, finished, tournament, match2opponents, match2games",
+          query = "match2id, date, winner, finished, bestof, tournament, match2opponents, match2games",
           limit = 10,
           order = "date desc",
         })

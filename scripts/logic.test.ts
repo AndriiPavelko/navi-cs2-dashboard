@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { pillsFor } from "../lib/format";
 import { classifyTone } from "../lib/tone";
+import { computeDistanceBand, distanceHeadline, lengthFromRaw } from "../lib/distance";
 import { computeWinBand } from "../lib/winband";
 import { normalizeMatch } from "../lib/sync/normalize";
 import { readKillDeath } from "../lib/sync/raw";
@@ -58,6 +59,34 @@ const hot = computeWinBand({
 });
 assert.ok(hot.low >= 15 && hot.high <= 85 && hot.high > hot.low);
 assert.equal(hot.high, 85);
+
+const distance = computeDistanceBand({
+  opponent: "G2 Esports",
+  navi: { two: 5, three: 5 },
+  opponentForm: { two: 4, three: 5 },
+  h2h: { two: 3, three: 2 },
+});
+assert.ok(distance);
+assert.equal(distance.low, 44);
+assert.equal(distance.high, 56);
+assert.equal(distanceHeadline(distance.low, distance.high), "І дві, і три карти лишаються поруч");
+
+const longSeries = computeDistanceBand({
+  opponent: "G2 Esports",
+  navi: { two: 1, three: 9 },
+  opponentForm: { two: 1, three: 9 },
+  h2h: { two: 0, three: 5 },
+});
+assert.ok(longSeries);
+assert.ok(longSeries.low >= 55);
+assert.equal(distanceHeadline(longSeries.low, longSeries.high), "Частіше серія доходить до третьої карти");
+
+const g2 = lengthFromRaw([
+  { finished: "1", bestof: "3", match2opponents: [{ score: "1" }, { score: "2" }] },
+  { finished: "1", bestof: "5", match2opponents: [{ score: "0" }, { score: "3" }] },
+  { finished: "1", bestof: "3", match2opponents: [{ score: "2" }, { score: "0" }] },
+]);
+assert.deepEqual(g2, { two: 1, three: 1 });
 
 assert.deepEqual(readKillDeath({ kills: 18 }), { kills: null, deaths: null });
 assert.deepEqual(readKillDeath({ kills: 18, deaths: 14 }), { kills: 18, deaths: 14 });
