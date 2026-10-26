@@ -47,8 +47,8 @@ export function SourceCredit() {
   const profile = TEAMS[teamFromPath(path)];
   return (
     <p className="credit">
-      Дані: <a href={`https://liquipedia.net/counterstrike/${profile.wiki}`}>{profile.label} на Liquipedia</a>
-      <span> · CC BY-SA · не HLTV</span>
+      Дані: <a href={`https://bo3.gg/teams/${profile.bo3Slug}`}>{profile.label} на bo3.gg</a>
+      <span> · кіли, смерті, ADR, рейтинг bo3 · без KAST і без HLTV Rating</span>
     </p>
   );
 }

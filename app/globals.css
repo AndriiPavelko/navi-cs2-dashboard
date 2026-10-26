@@ -153,6 +153,10 @@ h1 { font-size: 32px; line-height: 1.05; }
 .reasons li { font-size: 13px; padding-left: 12px; position: relative; }
 .reasons li::before { content: ""; width: 7px; height: 7px; background: var(--yellow); border: 1.5px solid var(--ink); position: absolute; left: 0; top: 0.45em; }
 .disclaimer, .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.chain { font-size: 14px; line-height: 1.45; margin-top: 12px; }
+.audit { margin-top: 12px; font-size: 14px; }
+.audit .miss { color: var(--loss); font-weight: 800; }
+.audit .hit { color: var(--win); font-weight: 800; }
 .disclaimer { margin-top: 8px; }
 
 .scoreline { margin-top: 12px; }

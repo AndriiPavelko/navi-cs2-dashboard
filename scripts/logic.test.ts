@@ -9,6 +9,10 @@ import { parseActiveRoster } from "../lib/sync/roster";
 import { parseTelegram } from "../lib/sync/posts";
 import { telegramSlug } from "../lib/sync/liquipedia";
 import { teamFromPath, teamHref } from "../lib/teams";
+import { bandMissedSide, computeSeriesChance } from "../lib/chance";
+import { opponentSlug } from "../lib/sync/bo3";
+import { prepareTeam } from "../lib/sync/prepare";
+import type { SideSeries } from "../lib/sync/bo3";
 
 const rosterWiki = `
 ==Player Roster==
@@ -139,5 +143,81 @@ assert.equal(teamFromPath("/faze/matches/abc"), "faze");
 assert.equal(teamFromPath("/matches/abc"), "navi");
 assert.equal(teamHref("faze", "/players"), "/faze/players");
 assert.equal(teamHref("navi", "/pulse"), "/pulse");
+
+assert.equal(opponentSlug("natus-vincere-vs-falcons-esports-02-11-2026", "natus-vincere"), "falcons-esports");
+assert.equal(opponentSlug("alliance-cs-vs-faze-27-10-2026", "faze"), "alliance-cs");
+assert.equal(bandMissedSide(40, 46, true), true);
+assert.equal(bandMissedSide(40, 46, false), false);
+assert.equal(bandMissedSide(50, 56, true), null);
+
+const chance = computeSeriesChance({
+  label: "NAVI",
+  opponent: "Falcons",
+  teamForm: { wins: 4, losses: 4, draws: 0 },
+  oppForm: { wins: 6, losses: 2, draws: 0 },
+  h2h: { wins: 1, losses: 1, draws: 0 },
+  h2hLast: { at: "2026-10-06T19:05:00.000Z", rivalId: 2713, rival: "Falcons", own: 1, other: 2 },
+  recent: [
+    { at: "2026-10-20T12:00:00.000Z", rivalId: 667, rival: "Vitality", own: 2, other: 1 },
+    { at: "2026-10-18T12:00:00.000Z", rivalId: 648, rival: "FURIA", own: 2, other: 0 },
+  ],
+  against: [
+    { at: "2026-10-04T16:30:00.000Z", rivalId: 667, rival: "Vitality", own: 1, other: 2 },
+    { at: "2026-10-25T15:45:00.000Z", rivalId: 648, rival: "FURIA", own: 2, other: 0 },
+  ],
+  teamPlayers: [{ nick: "w0nderful", kills: 20, deaths: 16, adr: 80, rating: 6.5, maps: 10 }],
+  oppPlayers: [{ nick: "m0NESY", kills: 22, deaths: 15, adr: 86, rating: 6.8, maps: 10 }],
+  windowLabel: "28 лип – 26 жов",
+});
+assert.match(chance.chain, /Falcons 2:1 проти Vitality/);
+assert.match(chance.chain, /Falcons 2:0 проти FURIA/);
+assert.match(chance.chain, /NAVI 1:2 проти Vitality/);
+assert.match(chance.chain, /NAVI 2:0 проти FURIA/);
+assert.match(chance.chain, /w0nderful/);
+assert.match(chance.chain, /m0NESY/);
+assert.match(chance.chain, /Шанс NAVI близько \d+–\d+%/);
+assert.match(chance.chain, /KAST/);
+assert.ok(!/ставк/i.test(chance.chain));
+assert.ok(chance.low < chance.high);
+
+function fixture(partial: Partial<SideSeries> & Pick<SideSeries, "id" | "at" | "opponentId" | "finished">): SideSeries {
+  return {
+    tournament: "Тест",
+    tier: "S-tier",
+    bestOf: 3,
+    url: "https://bo3.gg/matches/x",
+    teamId: 787,
+    opponentName: "Суперник",
+    ownScore: 0,
+    oppScore: 0,
+    ownWon: null,
+    maps: [],
+    ...partial,
+  };
+}
+
+const prepared = prepareTeam({
+  label: "NAVI",
+  windowLabel: "28 лип – 26 жов",
+  replayLimit: 1,
+  rosters: new Map([
+    [787, [{ id: "w0nderful", nick: "w0nderful", realName: null, isCoach: false, url: "https://bo3.gg/players/w0nderful", kills: 20, deaths: 16, adr: 80, rating: 6.5, maps: 10 }]],
+    [2713, [{ id: "m0nesy", nick: "m0NESY", realName: null, isCoach: false, url: "https://bo3.gg/players/m0nesy", kills: 22, deaths: 15, adr: 86, rating: 6.8, maps: 10 }]],
+  ]),
+  opponents: new Map([
+    [2713, [fixture({ id: "falcons-vitality", at: "2026-10-20T12:00:00.000Z", teamId: 2713, opponentId: 667, opponentName: "Vitality", ownScore: 2, oppScore: 1, ownWon: true, finished: true })]],
+  ]),
+  own: [
+    fixture({ id: "navi-vitality", at: "2026-10-04T16:30:00.000Z", opponentId: 667, opponentName: "Vitality", ownScore: 1, oppScore: 2, ownWon: false, finished: true }),
+    fixture({ id: "natus-vincere-vs-falcons-esports-02-11-2026", at: "2026-11-02T07:00:00.000Z", opponentId: 2713, opponentName: "Falcons", finished: false }),
+  ],
+});
+const next = prepared.find((item) => !item.series.finished);
+const past = prepared.find((item) => item.series.finished);
+assert.ok(next?.chain?.includes("Falcons 2:1 проти Vitality"));
+assert.ok(next?.chain?.includes("NAVI 1:2 проти Vitality"));
+assert.equal(next?.series.opponentName, "Falcons");
+assert.equal(past?.oldMiss, null);
+assert.ok(past?.oldLow != null);
 
 console.log("logic tests ok");

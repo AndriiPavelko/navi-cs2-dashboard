@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Lineup, MapList, SeriesHero, SeriesList, SourceLink, WhenLine } from "@/components/series-view";
+import { AuditList, Lineup, MapList, SeriesHero, SeriesList, SourceLink, WhenLine } from "@/components/series-view";
+import { MISSING_FIELDS } from "@/lib/chance";
 import { getAllSeries, getPlayers, getPosts } from "@/lib/data";
 import { berlinLong, joinLabel, percent, roleLabel } from "@/lib/format";
 import { killDeath, playedIn, seasonStats } from "@/lib/stats";
@@ -25,7 +26,7 @@ export async function HomeScreen({ team }: { team: TeamId }) {
       ) : (
         <section className="hero empty-hero">
           <h2>Розклад ще порожній</h2>
-          <p>Натисни «Оновити», щоб забрати сезон з Liquipedia.</p>
+          <p>Натисни «Оновити», щоб забрати сезон з bo3.gg.</p>
         </section>
       )}
       <section className="block">
@@ -60,10 +61,11 @@ export async function HomeScreen({ team }: { team: TeamId }) {
         </dl>
         {stats.draws ? <p className="note">Нічиї: {stats.draws}. У вінрейт вони не входять.</p> : null}
         <p className="note">
-          Вінрейт серій {percent(stats.wins, stats.wins + stats.losses)}. Карти рахуються лише там, де Liquipedia дала
+          Вінрейт серій {percent(stats.wins, stats.wins + stats.losses)}. Карти рахуються лише там, де bo3.gg дало
           переможця.
         </p>
       </section>
+      {team === "navi" ? <AuditList items={finished.slice(0, 10)} /> : null}
       <SeriesList title={later.length ? "Далі в розкладі" : "Останні серії"} items={later.length ? later : recent} />
     </>
   );
@@ -114,7 +116,7 @@ export async function PlayersScreen({ team }: { team: TeamId }) {
   return (
     <>
       <h1>Гравці</h1>
-      <p className="lede">Активний склад CS2 з Liquipedia. Якщо джерело змінить ростер, наступний синк теж змінить його.</p>
+      <p className="lede">Активний склад CS2 з bo3.gg. KAST джерело не віддає, HLTV Rating не вигадуємо.</p>
       {players.length ? (
         <ul className="roster">
           {players.map((player) => (
@@ -166,7 +168,7 @@ export async function PlayerScreen({ team, id }: { team: TeamId; id: string }) {
       <section className="block">
         <h2>{player.isCoach ? "Сезон команди, 2026" : "Участь у сезоні 2026"}</h2>
         {player.isCoach ? (
-          <p className="note">Liquipedia не ставить тренера в протокол матчу, тож тут рахунок команди за сезон.</p>
+          <p className="note">Тренеру bo3.gg не віддає кіли і смерті, тож тут рахунок команди за сезон.</p>
         ) : null}
         <dl className="stats">
           <div>
@@ -188,14 +190,21 @@ export async function PlayerScreen({ team, id }: { team: TeamId; id: string }) {
             </dd>
           </div>
         </dl>
-        {kd.samples > 0 ? (
+        {player.kills != null && player.deaths != null && !player.isCoach ? (
           <p className="kd">
-            K/D {(kd.deaths ? kd.kills / kd.deaths : kd.kills).toFixed(2)} · {kd.kills}/{kd.deaths} за {kd.samples}{" "}
-            серій, де джерело дало кіли і смерті
+            K/D {(player.deaths ? player.kills / player.deaths : player.kills).toFixed(2)} · {player.kills}/{player.deaths}
+            {player.adr != null ? ` · ADR ${Math.round(player.adr)}` : ""}
+            {player.rating != null ? ` · рейтинг bo3 ${player.rating.toFixed(2)}` : ""}
+            {player.mapsPlayed != null ? ` · ${player.mapsPlayed} карт` : ""}
+          </p>
+        ) : kd.samples > 0 ? (
+          <p className="kd">
+            K/D {(kd.deaths ? kd.kills / kd.deaths : kd.kills).toFixed(2)} · {kd.kills}/{kd.deaths} за {kd.samples} серій
           </p>
         ) : (
-          <p className="note">K/D немає: Liquipedia не віддала кіли і смерті. Rating 2.0, ADR і KAST не показуємо.</p>
+          <p className="note">Кілів і смертей за вікно джерело не дало.</p>
         )}
+        {!player.isCoach ? <p className="note">{MISSING_FIELDS}</p> : null}
         {!player.isCoach ? (
           <p className="note">
             Команда загалом: {season.wins}–{season.losses}, {percent(season.wins, season.wins + season.losses)}.
@@ -203,7 +212,7 @@ export async function PlayerScreen({ team, id }: { team: TeamId; id: string }) {
         ) : null}
         {player.url ? (
           <p className="source-link">
-            <a href={player.url}>Профіль на Liquipedia</a>
+            <a href={player.url}>{player.url.includes("bo3.gg") ? "Профіль на bo3.gg" : "Профіль на Liquipedia"}</a>
           </p>
         ) : null}
       </section>

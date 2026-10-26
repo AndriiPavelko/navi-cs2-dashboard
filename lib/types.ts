@@ -4,6 +4,9 @@ export type PersonInMatch = {
   flag: string;
   kills: number | null;
   deaths: number | null;
+  adr: number | null;
+  rating: number | null;
+  maps: number | null;
 };
 
 export type MapVM = {
@@ -34,6 +37,13 @@ export type SeriesVM = {
   winLow: number | null;
   winHigh: number | null;
   reasons: string[];
+  chain: string | null;
+  oldLow: number | null;
+  oldHigh: number | null;
+  oldReasons: string[];
+  oldSource: "stored" | "replay" | "shown" | null;
+  oldMiss: boolean | null;
+  oldNote: string | null;
   mapsLow: number | null;
   mapsHigh: number | null;
   mapReasons: string[];
@@ -51,6 +61,11 @@ export type PlayerVM = {
   isCoach: boolean;
   joinDate: string | null;
   url: string | null;
+  kills: number | null;
+  deaths: number | null;
+  adr: number | null;
+  rating: number | null;
+  mapsPlayed: number | null;
 };
 
 export type PostVM = {

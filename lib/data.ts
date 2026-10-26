@@ -24,6 +24,13 @@ type SeriesRow = {
   win_low: number | null;
   win_high: number | null;
   win_reasons: string[] | null;
+  chain: string | null;
+  old_low: number | null;
+  old_high: number | null;
+  old_reasons: string[] | null;
+  old_source: "stored" | "replay" | "shown" | null;
+  old_miss: boolean | null;
+  old_note: string | null;
   maps_low: number | null;
   maps_high: number | null;
   maps_reasons: string[] | null;
@@ -48,6 +55,9 @@ function people(value: PersonInMatch[] | null): PersonInMatch[] {
     flag: person.flag || "",
     kills: person.kills ?? null,
     deaths: person.deaths ?? null,
+    adr: person.adr ?? null,
+    rating: person.rating ?? null,
+    maps: person.maps ?? null,
   }));
 }
 
@@ -88,6 +98,13 @@ export const getAllSeries = cache(async (team: TeamId): Promise<SeriesVM[]> => {
     winLow: row.win_low,
     winHigh: row.win_high,
     reasons: Array.isArray(row.win_reasons) ? row.win_reasons : [],
+    chain: row.chain,
+    oldLow: row.old_low,
+    oldHigh: row.old_high,
+    oldReasons: Array.isArray(row.old_reasons) ? row.old_reasons : [],
+    oldSource: row.old_source,
+    oldMiss: row.old_miss,
+    oldNote: row.old_note,
     mapsLow: row.maps_low,
     mapsHigh: row.maps_high,
     mapReasons: Array.isArray(row.maps_reasons) ? row.maps_reasons : [],
@@ -107,6 +124,11 @@ export const getPlayers = cache(async (team: TeamId): Promise<PlayerVM[]> => {
     is_coach: boolean;
     join_date: Date | string | null;
     liquipedia_url: string | null;
+    kills: number | null;
+    deaths: number | null;
+    adr: number | null;
+    bo3_rating: number | null;
+    maps_played: number | null;
   }>("SELECT * FROM players WHERE team = $1 AND active = TRUE ORDER BY is_coach ASC, sort_order ASC, nickname ASC", [team]);
   return rows.map((row) => ({
     id: row.id,
@@ -117,6 +139,11 @@ export const getPlayers = cache(async (team: TeamId): Promise<PlayerVM[]> => {
     isCoach: row.is_coach,
     joinDate: row.join_date ? String(row.join_date).slice(0, 10) : null,
     url: row.liquipedia_url,
+    kills: row.kills,
+    deaths: row.deaths,
+    adr: row.adr == null ? null : Number(row.adr),
+    rating: row.bo3_rating == null ? null : Number(row.bo3_rating),
+    mapsPlayed: row.maps_played,
   }));
 });
 

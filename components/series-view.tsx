@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Countdown } from "@/components/countdown";
 import { distanceHeadline } from "@/lib/distance";
+import { MISSING_FIELDS } from "@/lib/chance";
 import { bandText, berlinClock, berlinLong, dateBadge, pillsFor, wikiUrl } from "@/lib/format";
 import { matchHref, TEAMS } from "@/lib/teams";
 import { winDisclaimer } from "@/lib/winband";
@@ -27,10 +28,12 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
         <>
           <Score series={series} />
           {seriesLengthFact(series) ? <p className="note">{seriesLengthFact(series)}</p> : null}
+          <OldAudit series={series} />
         </>
       ) : (
         <>
           <Countdown iso={series.at} />
+          {series.chain ? <p className="chain">{series.chain}</p> : null}
           {series.winLow != null && series.winHigh != null ? (
             <WinBand low={series.winLow} high={series.winHigh} reasons={series.reasons} />
           ) : null}
@@ -169,33 +172,115 @@ export function MapList({ series }: { series: SeriesVM }) {
   );
 }
 
+function sideText(low: number, high: number, label: string, opponent: string): string {
+  if (low > 50) return `Схилялась до ${label}`;
+  if (high < 50) return `Схилялась до ${opponent}`;
+  return "Не обрала сторону";
+}
+
+export function OldAudit({ series }: { series: SeriesVM }) {
+  if (series.oldLow == null || series.oldHigh == null) return null;
+  const label = TEAMS[series.team].label;
+  const verdict =
+    series.oldMiss === true
+      ? "Сторону переможця не вгадала."
+      : series.oldMiss === false
+        ? "Сторону переможця назвала вірно."
+        : "Сторону не називала, бо смуга заходила на 50%.";
+  const tone = series.oldMiss === true ? "miss" : series.oldMiss === false ? "hit" : "";
+  const source =
+    series.oldSource === "shown"
+      ? "Цю смугу дашборд показував до матчу."
+      : series.oldSource === "stored"
+        ? "Цю смугу порахували до матчу і зберегли."
+        : "Збережена смуга після синку не лишилась. Це повтор тієї самої формули на серіях до матчу.";
+  return (
+    <div className="audit">
+      <p>
+        Стара смуга: {bandText(series.oldLow, series.oldHigh)}. {sideText(series.oldLow, series.oldHigh, label, series.opponent)}. Факт: {label}{" "}
+        {series.naviScore ?? "–"}:{series.oppScore ?? "–"}. <span className={tone}>{verdict}</span>
+      </p>
+      <p className="note">{source}</p>
+      {series.oldNote ? <p className="note">{series.oldNote}</p> : null}
+    </div>
+  );
+}
+
+export function AuditList({ items }: { items: SeriesVM[] }) {
+  const checked = items.filter((item) => item.oldLow != null && item.oldHigh != null);
+  if (!checked.length) return null;
+  const misses = checked.filter((item) => item.oldMiss === true).length;
+  const unnamed = checked.filter((item) => item.oldMiss == null).length;
+  return (
+    <section className="block">
+      <h2>Звірка старої смуги</h2>
+      <p>
+        Стара смуга не вгадала сторону переможця в {misses} з {checked.length} останніх зіграних серій NAVI.
+        {unnamed ? ` Ще ${unnamed} не назвала сторону, бо зайшла на 50%.` : ""}
+      </p>
+      <ul className="rows">
+        {checked.map((series) => (
+          <li key={series.id}>
+            <Link href={matchHref(series.team, series.id)}>
+              <span className="row-when">{dateBadge(series.at)}</span>
+              <span className="row-main">
+                <strong>{series.opponent}</strong>
+                <em>
+                  {series.naviScore ?? "–"}:{series.oppScore ?? "–"} · {bandText(series.oldLow ?? 0, series.oldHigh ?? 0)}
+                </em>
+              </span>
+              <span className={`row-end ${series.oldMiss === true ? "lost" : series.oldMiss === false ? "won" : ""}`}>
+                {series.oldMiss === true ? "промах" : series.oldMiss === false ? "влучила" : "без сторони"}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="note">
+        Збережені смуги синк раніше стирав, тож тут повтор старої формули на матчах до серії.
+        {checked.some((item) => item.oldNote) ? ` ${checked.find((item) => item.oldNote)?.oldNote}` : ""}
+      </p>
+    </section>
+  );
+}
+
 export function Lineup({ title, people }: { title: string; people: SeriesVM["naviPlayers"] }) {
   const showKd = people.some((person) => person.kills != null && person.deaths != null);
   return (
     <section className="block">
       <h2>{title}</h2>
       <ul className="lineup">
-        {people.map((person) => (
-          <li key={`${person.displayname}-${person.name}`}>
-            <b>{person.displayname || person.name}</b>
-            {person.kills != null && person.deaths != null ? (
-              <span>
-                K/D {person.kills}/{person.deaths}
-              </span>
-            ) : null}
-          </li>
-        ))}
+        {people.map((person) => {
+          const kd =
+            person.kills != null && person.deaths != null && person.deaths > 0
+              ? (person.kills / person.deaths).toFixed(2)
+              : null;
+          return (
+            <li key={`${person.displayname}-${person.name}`}>
+              <b>{person.displayname || person.name}</b>
+              {kd ? (
+                <span>
+                  {kd} K/D · {person.kills}/{person.deaths}
+                  {person.adr != null ? ` · ADR ${Math.round(person.adr)}` : ""}
+                  {person.rating != null ? ` · рейтинг bo3 ${person.rating.toFixed(2)}` : ""}
+                  {person.maps != null ? ` · ${person.maps} карт` : ""}
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
-      {!showKd ? <p className="note">K/D у цьому матчі джерело не дало. Rating 2.0, ADR і KAST не вигадуємо.</p> : null}
+      {showKd ? <p className="note">{MISSING_FIELDS}</p> : <p className="note">Статистику гравців джерело для цієї серії не дало.</p>}
     </section>
   );
 }
 
 export function SourceLink({ pageName }: { pageName: string | null }) {
   if (!pageName) return null;
+  const external = pageName.startsWith("http");
   return (
     <p className="source-link">
-      <a href={wikiUrl(pageName)}>Сторінка на Liquipedia</a>
+      <a href={external ? pageName : wikiUrl(pageName)}>{external ? "Матч на bo3.gg" : "Сторінка на Liquipedia"}</a>
     </p>
   );
 }

@@ -20,6 +20,9 @@ export type StoredPlayer = {
   flag: string;
   kills: number | null;
   deaths: number | null;
+  adr?: number | null;
+  rating?: number | null;
+  maps?: number | null;
 };
 
 export type StoredMap = {
