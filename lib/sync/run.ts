@@ -169,7 +169,11 @@ async function writeAll(
     }
 
     const ids = prepared.map((item) => item.series.id);
+    const mapIds = prepared.flatMap((item) => item.series.maps.map((map) => map.id));
     await client.query("DELETE FROM maps WHERE team = $1 AND series_id = ANY($2::text[])", [team, ids]);
+    if (mapIds.length) {
+      await client.query("DELETE FROM maps WHERE id = ANY($1::text[])", [mapIds]);
+    }
     for (const item of prepared) {
       for (const map of item.series.maps) {
         await client.query(

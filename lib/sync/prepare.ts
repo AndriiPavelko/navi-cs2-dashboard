@@ -196,8 +196,8 @@ export function prepareTeam(input: {
       }
     }
 
-    const maps: StoredMap[] = item.maps.map((map) => ({
-      id: `${item.id}:${map.position}`,
+    const maps: StoredMap[] = item.maps.map((map, index) => ({
+      id: `${item.teamId}:${item.id}:${index + 1}`,
       mapName: map.name,
       naviScore: map.own,
       opponentScore: map.opp,
