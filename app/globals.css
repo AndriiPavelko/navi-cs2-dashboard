@@ -154,6 +154,71 @@ h1 { font-size: 32px; line-height: 1.05; }
 .reasons li::before { content: ""; width: 7px; height: 7px; background: var(--yellow); border: 1.5px solid var(--ink); position: absolute; left: 0; top: 0.45em; }
 .disclaimer, .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
 .chain { font-size: 14px; line-height: 1.45; margin-top: 12px; }
+.chain mark, .brief-note mark, .note mark {
+  background: var(--yellow);
+  color: var(--ink);
+  padding: 0 3px;
+  font-weight: 800;
+}
+.brief { display: grid; gap: 16px; margin-top: 14px; }
+.brief section { display: grid; gap: 6px; }
+.brief h3, .brief-lineup h4 {
+  font-family: var(--font-body), sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.brief-hint { color: var(--muted); font-size: 12px; }
+.brief-rows, .brief-lineup ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.brief-rows li, .brief-lineup li {
+  background: var(--sheet);
+  border: 1.5px solid var(--ink);
+  padding: 8px 10px;
+}
+.brief-rows li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "team score" "date score";
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+}
+.brief-rows strong { grid-area: team; font-size: 15px; line-height: 1.2; }
+.brief-rows span { grid-area: date; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; color: var(--muted); }
+.brief-rows b, .brief-rows em {
+  grid-area: score;
+  justify-self: end;
+  text-align: right;
+}
+.brief-rows b { font-family: var(--font-display), "Unbounded", sans-serif; font-size: 22px; line-height: 1; letter-spacing: -0.03em; }
+.brief-rows em { font-style: normal; font-size: 12px; font-weight: 800; max-width: 92px; }
+.brief-lineup { display: grid; gap: 6px; }
+.brief-lineup h4 { margin-top: 4px; }
+.brief-lineup li { display: grid; gap: 6px; }
+.brief-lineup strong {
+  font-family: var(--font-display), "Unbounded", sans-serif;
+  font-size: 18px;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.brief-lineup dl { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 0; }
+.brief-lineup dl div { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.brief-lineup dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.brief-lineup dd { margin: 0; font-weight: 800; font-size: 14px; }
+.brief-h2h {
+  background: var(--yellow);
+  border: 1.5px solid var(--ink);
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+.brief-h2h p { font-size: 14px; font-weight: 800; }
+.brief-h2h b { font-family: var(--font-display), "Unbounded", sans-serif; font-size: 28px; letter-spacing: -0.03em; line-height: 1; }
+.brief-h2h span { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
+.brief-plain { font-size: 14px; font-weight: 700; }
+.brief-note { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .chances { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
 .chances li {
   display: flex;

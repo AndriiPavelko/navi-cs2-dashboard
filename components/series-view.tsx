@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Countdown } from "@/components/countdown";
+import { parseMatchBrief } from "@/lib/chain-brief";
 import { MISSING_FIELDS } from "@/lib/chance";
 import { bandText, berlinClock, berlinLong, dateBadge, midPercent, pairPercents, pillsFor, wikiUrl } from "@/lib/format";
 import { matchHref, TEAMS } from "@/lib/teams";
@@ -33,7 +34,7 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
         <>
           <Countdown iso={series.at} />
           <ChancePoints series={series} />
-          {series.chain ? <p className="chain">{series.chain}</p> : null}
+          {series.chain ? <MatchBrief chain={series.chain} /> : null}
           {series.winLow != null || series.mapsLow != null ? <p className="disclaimer">{winDisclaimer()}</p> : null}
         </>
       )}
@@ -86,6 +87,112 @@ export function ChancePoints({ series }: { series: SeriesVM }) {
         </li>
       ) : null}
     </ul>
+  );
+}
+
+function QuotedRating({ text }: { text: string }) {
+  const parts = text.split("«рейтинг bo3»");
+  if (parts.length === 1) return <>{text}</>;
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span key={index}>
+          {part}
+          {index < parts.length - 1 ? <mark>«рейтинг bo3»</mark> : null}
+        </span>
+      ))}
+    </>
+  );
+}
+
+export function MatchBrief({ chain }: { chain: string }) {
+  const brief = parseMatchBrief(chain);
+  if (!brief) {
+    return (
+      <p className="chain">
+        <QuotedRating text={chain} />
+      </p>
+    );
+  }
+  return (
+    <div className="brief">
+      <section>
+        <h3>Останні матчі {brief.recentTeam}</h3>
+        <p className="brief-hint">Перша цифра рахунку — карти {brief.recentTeam}</p>
+        <ul className="brief-rows">
+          {brief.recent.map((row, index) => (
+            <li key={`${row.team}-${row.date}-${index}`}>
+              <strong>{row.team}</strong>
+              <b>{row.score}</b>
+              <span>{row.date}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section>
+        <h3>{brief.sameTeam} проти тих самих команд</h3>
+        <p className="brief-hint">Перша цифра рахунку — карти {brief.sameTeam}</p>
+        <ul className="brief-rows">
+          {brief.same.map((row, index) => (
+            <li key={`${row.team}-${row.date ?? "none"}-${index}`}>
+              <strong>{row.team}</strong>
+              {row.absent ? <em>у 2026 не грали</em> : <b>{row.score}</b>}
+              {row.date ? <span>{row.date}</span> : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section>
+        <h3>Форма гравців</h3>
+        <p className="brief-hint">{brief.windowLabel}</p>
+        {brief.lineups.map((lineup) => (
+          <div className="brief-lineup" key={lineup.team}>
+            <h4>{lineup.team}</h4>
+            <ul>
+              {lineup.players.map((player) => (
+                <li key={player.nick}>
+                  <strong>{player.nick}</strong>
+                  <dl>
+                    <div>
+                      <dt>K/D</dt>
+                      <dd>{player.kd}</dd>
+                    </div>
+                    <div>
+                      <dt>ADR</dt>
+                      <dd>{player.adr}</dd>
+                    </div>
+                    <div>
+                      <dt>рейтинг bo3</dt>
+                      <dd>{player.rating}</dd>
+                    </div>
+                    <div>
+                      <dt>карти</dt>
+                      <dd>{player.maps}</dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+      <section>
+        <h3>Особиста зустріч 2026</h3>
+        {brief.h2hScore ? (
+          <div className="brief-h2h">
+            <p>
+              {brief.h2hLeft} <b>{brief.h2hScore}</b> {brief.h2hRight}
+            </p>
+            <span>{brief.h2hDate}</span>
+          </div>
+        ) : (
+          <p className="brief-plain">{brief.h2hPlain}</p>
+        )}
+      </section>
+      <p className="brief-note">
+        <QuotedRating text="KAST немає. Цифра «рейтинг bo3» — це рейтинг bo3.gg, не HLTV Rating." />
+      </p>
+    </div>
   );
 }
 
@@ -249,7 +356,13 @@ export function Lineup({ title, people }: { title: string; people: SeriesVM["nav
           );
         })}
       </ul>
-      {showKd ? <p className="note">{MISSING_FIELDS}</p> : <p className="note">Статистику гравців джерело для цієї серії не дало.</p>}
+      {showKd ? (
+        <p className="note">
+          <QuotedRating text={MISSING_FIELDS} />
+        </p>
+      ) : (
+        <p className="note">Статистику гравців джерело для цієї серії не дало.</p>
+      )}
     </section>
   );
 }
