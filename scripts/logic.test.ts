@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { pillsFor } from "../lib/format";
+import { pairPercents, pillsFor } from "../lib/format";
 import { classifyTone } from "../lib/tone";
 import { computeDistanceBand, distanceHeadline, lengthFromRaw } from "../lib/distance";
 import { computeWinBand } from "../lib/winband";
@@ -175,8 +175,12 @@ assert.match(chance.chain, /NAVI 1:2 проти Vitality/);
 assert.match(chance.chain, /NAVI 2:0 проти FURIA/);
 assert.match(chance.chain, /w0nderful/);
 assert.match(chance.chain, /m0NESY/);
-assert.match(chance.chain, /Шанс NAVI близько \d+–\d+%/);
+assert.doesNotMatch(chance.chain, /близько \d+–\d+%/);
 assert.match(chance.chain, /KAST/);
+const split = pairPercents(43, 51);
+assert.equal(split.team + split.opponent, 100);
+assert.equal(split.team, 47);
+assert.equal(pairPercents(56, 64).team, 60);
 assert.ok(!/ставк/i.test(chance.chain));
 assert.ok(chance.low < chance.high);
 

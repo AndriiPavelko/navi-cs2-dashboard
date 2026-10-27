@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { Countdown } from "@/components/countdown";
-import { distanceHeadline } from "@/lib/distance";
 import { MISSING_FIELDS } from "@/lib/chance";
-import { bandText, berlinClock, berlinLong, dateBadge, pillsFor, wikiUrl } from "@/lib/format";
+import { bandText, berlinClock, berlinLong, dateBadge, midPercent, pairPercents, pillsFor, wikiUrl } from "@/lib/format";
 import { matchHref, TEAMS } from "@/lib/teams";
 import { winDisclaimer } from "@/lib/winband";
 import type { SeriesVM } from "@/lib/types";
@@ -33,13 +32,8 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
       ) : (
         <>
           <Countdown iso={series.at} />
+          <ChancePoints series={series} />
           {series.chain ? <p className="chain">{series.chain}</p> : null}
-          {series.winLow != null && series.winHigh != null ? (
-            <WinBand low={series.winLow} high={series.winHigh} reasons={series.reasons} />
-          ) : null}
-          {series.bestOf === 3 && series.mapsLow != null && series.mapsHigh != null ? (
-            <MapDistance low={series.mapsLow} high={series.mapsHigh} reasons={series.mapReasons} />
-          ) : null}
           {series.winLow != null || series.mapsLow != null ? <p className="disclaimer">{winDisclaimer()}</p> : null}
         </>
       )}
@@ -67,46 +61,31 @@ export function Score({ series }: { series: SeriesVM }) {
   );
 }
 
-export function WinBand({ low, high, reasons }: { low: number; high: number; reasons: string[] }) {
+export function ChancePoints({ series }: { series: SeriesVM }) {
+  if (series.winLow == null || series.winHigh == null) return null;
+  const label = TEAMS[series.team].label;
+  const wins = pairPercents(series.winLow, series.winHigh);
+  const third =
+    series.bestOf === 3 && series.mapsLow != null && series.mapsHigh != null
+      ? midPercent(series.mapsLow, series.mapsHigh)
+      : null;
   return (
-    <div className="band">
-      <div className="band-top">
-        <span>Шанс серії</span>
-        <strong>{bandText(low, high)}</strong>
-      </div>
-      <div className="track" aria-hidden="true">
-        <i style={{ left: `${low}%`, width: `${Math.max(high - low, 1)}%` }} />
-      </div>
-      {reasons.length ? (
-        <ul className="reasons">
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
+    <ul className="chances">
+      <li>
+        <span>Перемога {label}</span>
+        <b>{wins.team}%</b>
+      </li>
+      <li>
+        <span>Перемога {series.opponent}</span>
+        <b>{wins.opponent}%</b>
+      </li>
+      {third != null ? (
+        <li>
+          <span>3 карти</span>
+          <b>{third}%</b>
+        </li>
       ) : null}
-    </div>
-  );
-}
-
-export function MapDistance({ low, high, reasons }: { low: number; high: number; reasons: string[] }) {
-  return (
-    <div className="band">
-      <p className="lean">{distanceHeadline(low, high)}</p>
-      <div className="band-top">
-        <span>Третя карта</span>
-        <strong>{bandText(low, high)}</strong>
-      </div>
-      <div className="track" aria-hidden="true">
-        <i style={{ left: `${low}%`, width: `${Math.max(high - low, 1)}%` }} />
-      </div>
-      {reasons.length ? (
-        <ul className="reasons">
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+    </ul>
   );
 }
 
@@ -138,7 +117,7 @@ export function SeriesList({ title, items }: { title: string; items: SeriesVM[] 
                 {series.finished
                   ? `${series.naviScore ?? "–"}:${series.oppScore ?? "–"}`
                   : series.winLow != null && series.winHigh != null
-                    ? bandText(series.winLow, series.winHigh)
+                    ? `${pairPercents(series.winLow, series.winHigh).team}%`
                     : berlinClock(series.at)}
               </span>
             </Link>

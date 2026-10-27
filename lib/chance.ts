@@ -201,7 +201,6 @@ export function computeSeriesChance(input: {
     ourBits.length ? `${input.label} з цими командами: ${ourBits.join("; ")}.` : "",
     playersText ? `Форма складів (${input.windowLabel}): ${playersText}` : "",
     h2hText,
-    `Шанс ${input.label} близько ${low}–${high}%.`,
     MISSING_FIELDS,
   ]
     .filter(Boolean)
