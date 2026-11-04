@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Countdown } from "@/components/countdown";
-import { distanceHeadline } from "@/lib/distance";
-import { bandText, berlinClock, berlinLong, dateBadge, pillsFor, wikiUrl } from "@/lib/format";
+import { parseMatchBrief } from "@/lib/chain-brief";
+import { MISSING_FIELDS } from "@/lib/chance";
+import { bandText, berlinClock, berlinLong, dateBadge, midPercent, pairPercents, pillsFor, wikiUrl } from "@/lib/format";
 import { matchHref, TEAMS } from "@/lib/teams";
 import { winDisclaimer } from "@/lib/winband";
 import type { SeriesVM } from "@/lib/types";
@@ -29,10 +30,12 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
         <>
           <Score series={series} />
           {seriesLengthFact(series) ? <p className="note">{seriesLengthFact(series)}</p> : null}
+          <OldAudit series={series} />
         </>
       ) : isUpcoming(series) ? (
         <>
           {series.status === "running" ? <p className="note">Матч триває. Рахунок очікує перевірки джерела.</p> : <Countdown iso={series.at} />}
+          {series.chain ? <MatchBrief chain={series.chain} /> : null}
           {series.winLow != null && series.winHigh != null ? (
             <div className="band"><p className="lean">Форма за останні 90 днів</p><ul className="reasons">{series.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>
           ) : series.status === "scheduled" ? <p className="note">Недостатньо перевірених даних для порівняння форми.</p> : null}
@@ -70,45 +73,136 @@ export function Score({ series }: { series: SeriesVM }) {
   );
 }
 
-export function WinBand({ low, high, reasons }: { low: number; high: number; reasons: string[] }) {
+export function ChancePoints({ series }: { series: SeriesVM }) {
+  if (series.winLow == null || series.winHigh == null) return null;
+  const label = TEAMS[series.team].label;
+  const wins = pairPercents(series.winLow, series.winHigh);
+  const third =
+    series.bestOf === 3 && series.mapsLow != null && series.mapsHigh != null
+      ? midPercent(series.mapsLow, series.mapsHigh)
+      : null;
   return (
-    <div className="band">
-      <div className="band-top">
-        <span>Шанс серії</span>
-        <strong>{bandText(low, high)}</strong>
-      </div>
-      <div className="track" aria-hidden="true">
-        <i style={{ left: `${low}%`, width: `${Math.max(high - low, 1)}%` }} />
-      </div>
-      {reasons.length ? (
-        <ul className="reasons">
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
+    <ul className="chances">
+      <li>
+        <span>Перемога {label}</span>
+        <b>{wins.team}%</b>
+      </li>
+      <li>
+        <span>Перемога {series.opponent}</span>
+        <b>{wins.opponent}%</b>
+      </li>
+      {third != null ? (
+        <li>
+          <span>3 карти</span>
+          <b>{third}%</b>
+        </li>
       ) : null}
-    </div>
+    </ul>
   );
 }
 
-export function MapDistance({ low, high, reasons }: { low: number; high: number; reasons: string[] }) {
+function QuotedRating({ text }: { text: string }) {
+  const parts = text.split("«рейтинг bo3»");
+  if (parts.length === 1) return <>{text}</>;
   return (
-    <div className="band">
-      <p className="lean">{distanceHeadline(low, high)}</p>
-      <div className="band-top">
-        <span>Третя карта</span>
-        <strong>{bandText(low, high)}</strong>
-      </div>
-      <div className="track" aria-hidden="true">
-        <i style={{ left: `${low}%`, width: `${Math.max(high - low, 1)}%` }} />
-      </div>
-      {reasons.length ? (
-        <ul className="reasons">
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
+    <>
+      {parts.map((part, index) => (
+        <span key={index}>
+          {part}
+          {index < parts.length - 1 ? <mark>«рейтинг bo3»</mark> : null}
+        </span>
+      ))}
+    </>
+  );
+}
+
+export function MatchBrief({ chain }: { chain: string }) {
+  const brief = parseMatchBrief(chain);
+  if (!brief) {
+    return (
+      <p className="chain">
+        <QuotedRating text={chain} />
+      </p>
+    );
+  }
+  return (
+    <div className="brief">
+      <section>
+        <h3>Останні матчі {brief.recentTeam}</h3>
+        <p className="brief-hint">Перша цифра рахунку — карти {brief.recentTeam}</p>
+        <ul className="brief-rows">
+          {brief.recent.map((row, index) => (
+            <li key={`${row.team}-${row.date}-${index}`}>
+              <strong>{row.team}</strong>
+              <b>{row.score}</b>
+              <span>{row.date}</span>
+            </li>
           ))}
         </ul>
-      ) : null}
+      </section>
+      <section>
+        <h3>{brief.sameTeam} проти тих самих команд</h3>
+        <p className="brief-hint">Перша цифра рахунку — карти {brief.sameTeam}</p>
+        <ul className="brief-rows">
+          {brief.same.map((row, index) => (
+            <li key={`${row.team}-${row.date ?? "none"}-${index}`}>
+              <strong>{row.team}</strong>
+              {row.absent ? <em>у 2026 не грали</em> : <b>{row.score}</b>}
+              {row.date ? <span>{row.date}</span> : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section>
+        <h3>Форма гравців</h3>
+        <p className="brief-hint">{brief.windowLabel}</p>
+        {brief.lineups.map((lineup) => (
+          <div className="brief-lineup" key={lineup.team}>
+            <h4>{lineup.team}</h4>
+            <ul>
+              {lineup.players.map((player) => (
+                <li key={player.nick}>
+                  <strong>{player.nick}</strong>
+                  <dl>
+                    <div>
+                      <dt>K/D</dt>
+                      <dd>{player.kd}</dd>
+                    </div>
+                    <div>
+                      <dt>ADR</dt>
+                      <dd>{player.adr}</dd>
+                    </div>
+                    <div>
+                      <dt>рейтинг bo3</dt>
+                      <dd>{player.rating}</dd>
+                    </div>
+                    <div>
+                      <dt>карти</dt>
+                      <dd>{player.maps}</dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+      <section>
+        <h3>Особиста зустріч 2026</h3>
+        {brief.h2hScore ? (
+          <div className="brief-h2h">
+            <p>
+              {brief.h2hLeft} <b>{brief.h2hScore}</b> {brief.h2hRight}
+            </p>
+            <span>{brief.h2hDate}</span>
+          </div>
+        ) : (
+          <p className="brief-plain">{brief.h2hPlain}</p>
+        )}
+      </section>
+      <p className="brief-note">
+        <QuotedRating text="KAST немає. Цифра «рейтинг bo3» — це рейтинг bo3.gg, не HLTV Rating." />
+      </p>
     </div>
   );
 }
@@ -175,33 +269,121 @@ export function MapList({ series }: { series: SeriesVM }) {
   );
 }
 
+function sideText(low: number, high: number, label: string, opponent: string): string {
+  if (low > 50) return `Схилялась до ${label}`;
+  if (high < 50) return `Схилялась до ${opponent}`;
+  return "Не обрала сторону";
+}
+
+export function OldAudit({ series }: { series: SeriesVM }) {
+  if (series.oldLow == null || series.oldHigh == null) return null;
+  const label = TEAMS[series.team].label;
+  const verdict =
+    series.oldMiss === true
+      ? "Сторону переможця не вгадала."
+      : series.oldMiss === false
+        ? "Сторону переможця назвала вірно."
+        : "Сторону не називала, бо смуга заходила на 50%.";
+  const tone = series.oldMiss === true ? "miss" : series.oldMiss === false ? "hit" : "";
+  const source =
+    series.oldSource === "shown"
+      ? "Цю смугу дашборд показував до матчу."
+      : series.oldSource === "stored"
+        ? "Цю смугу порахували до матчу і зберегли."
+        : "Збережена смуга після синку не лишилась. Це повтор тієї самої формули на серіях до матчу.";
+  return (
+    <div className="audit">
+      <p>
+        Стара смуга: {bandText(series.oldLow, series.oldHigh)}. {sideText(series.oldLow, series.oldHigh, label, series.opponent)}. Факт: {label}{" "}
+        {series.naviScore ?? "–"}:{series.oppScore ?? "–"}. <span className={tone}>{verdict}</span>
+      </p>
+      <p className="note">{source}</p>
+      {series.oldNote ? <p className="note">{series.oldNote}</p> : null}
+    </div>
+  );
+}
+
+export function AuditList({ items }: { items: SeriesVM[] }) {
+  const checked = items.filter((item) => item.oldLow != null && item.oldHigh != null);
+  if (!checked.length) return null;
+  const misses = checked.filter((item) => item.oldMiss === true).length;
+  const unnamed = checked.filter((item) => item.oldMiss == null).length;
+  return (
+    <section className="block">
+      <h2>Звірка старої смуги</h2>
+      <p>
+        Стара смуга не вгадала сторону переможця в {misses} з {checked.length} останніх зіграних серій NAVI.
+        {unnamed ? ` Ще ${unnamed} не назвала сторону, бо зайшла на 50%.` : ""}
+      </p>
+      <ul className="rows">
+        {checked.map((series) => (
+          <li key={series.id}>
+            <Link href={matchHref(series.team, series.id)}>
+              <span className="row-when">{dateBadge(series.at)}</span>
+              <span className="row-main">
+                <strong>{series.opponent}</strong>
+                <em>
+                  {series.naviScore ?? "–"}:{series.oppScore ?? "–"} · {bandText(series.oldLow ?? 0, series.oldHigh ?? 0)}
+                </em>
+              </span>
+              <span className={`row-end ${series.oldMiss === true ? "lost" : series.oldMiss === false ? "won" : ""}`}>
+                {series.oldMiss === true ? "промах" : series.oldMiss === false ? "влучила" : "без сторони"}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="note">
+        Збережені смуги синк раніше стирав, тож тут повтор старої формули на матчах до серії.
+        {checked.some((item) => item.oldNote) ? ` ${checked.find((item) => item.oldNote)?.oldNote}` : ""}
+      </p>
+    </section>
+  );
+}
+
 export function Lineup({ title, people }: { title: string; people: SeriesVM["naviPlayers"] }) {
   const showKd = people.some((person) => person.kills != null && person.deaths != null);
   return (
     <section className="block">
       <h2>{title}</h2>
       <ul className="lineup">
-        {people.map((person) => (
-          <li key={`${person.displayname}-${person.name}`}>
-            <b>{person.displayname || person.name}</b>
-            {person.kills != null && person.deaths != null ? (
-              <span>
-                K/D {person.kills}/{person.deaths}
-              </span>
-            ) : null}
-          </li>
-        ))}
+        {people.map((person) => {
+          const kd =
+            person.kills != null && person.deaths != null && person.deaths > 0
+              ? (person.kills / person.deaths).toFixed(2)
+              : null;
+          return (
+            <li key={`${person.displayname}-${person.name}`}>
+              <b>{person.displayname || person.name}</b>
+              {kd ? (
+                <span>
+                  {kd} K/D · {person.kills}/{person.deaths}
+                  {person.adr != null ? ` · ADR ${Math.round(person.adr)}` : ""}
+                  {person.rating != null ? ` · рейтинг bo3 ${person.rating.toFixed(2)}` : ""}
+                  {person.maps != null ? ` · ${person.maps} карт` : ""}
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
-      {!showKd ? <p className="note">K/D у цьому матчі джерело не дало. Rating 2.0, ADR і KAST не вигадуємо.</p> : null}
+      {showKd ? (
+        <p className="note">
+          <QuotedRating text={MISSING_FIELDS} />
+        </p>
+      ) : (
+        <p className="note">Статистику гравців джерело для цієї серії не дало.</p>
+      )}
     </section>
   );
 }
 
 export function SourceLink({ pageName }: { pageName: string | null }) {
   if (!pageName) return null;
+  const external = pageName.startsWith("http");
   return (
     <p className="source-link">
-      <a href={wikiUrl(pageName)}>Сторінка на Liquipedia</a>
+      <a href={external ? pageName : wikiUrl(pageName)}>{external ? "Матч на bo3.gg" : "Сторінка на Liquipedia"}</a>
     </p>
   );
 }

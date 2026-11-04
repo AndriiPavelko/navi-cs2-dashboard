@@ -9,6 +9,8 @@ export type TeamProfile = {
   hello: string;
   season: string;
   wiki: string;
+  bo3Id: number;
+  bo3Slug: string;
 };
 
 export const NAVI: TeamProfile = {
@@ -20,6 +22,8 @@ export const NAVI: TeamProfile = {
   hello: "Привіт, Andrii",
   season: "Сезон NAVI CS2, 2026",
   wiki: "Natus_Vincere",
+  bo3Id: 787,
+  bo3Slug: "natus-vincere",
 };
 
 export const FAZE: TeamProfile = {
@@ -31,6 +35,8 @@ export const FAZE: TeamProfile = {
   hello: "FaZe Clan",
   season: "Сезон FaZe CS2, 2026",
   wiki: "FaZe_Clan",
+  bo3Id: 791,
+  bo3Slug: "faze",
 };
 
 export const TEAMS: Record<TeamId, TeamProfile> = {

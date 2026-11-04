@@ -44,13 +44,13 @@ export function TopBar({ checks }: { checks: SourceCheck[] }) {
   );
 }
 
-export function SourceCredit() {
+export function SourceCredit({ bo3 = true }: { bo3?: boolean }) {
   const path = usePathname() || "/";
   const profile = TEAMS[teamFromPath(path)];
   return (
     <p className="credit">
-      Дані: <a href={`https://liquipedia.net/counterstrike/${profile.wiki}`}>{profile.label} на Liquipedia</a>
-      <span> · CC BY-SA · не HLTV</span>
+      Дані: <a href={bo3 ? `https://bo3.gg/teams/${profile.bo3Slug}` : `https://liquipedia.net/counterstrike/${profile.wiki}`}>{profile.label} на {bo3 ? "bo3.gg":"Liquipedia"}</a>
+      <span>{bo3 ? " · кіли, смерті, ADR, рейтинг bo3 · без KAST і без HLTV Rating" : " · CC BY-SA"}</span>
     </p>
   );
 }

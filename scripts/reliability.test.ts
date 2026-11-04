@@ -13,6 +13,7 @@ import { selectFacts, updateDigest } from "../lib/sync/summary";
 import { computeWinBand } from "../lib/winband";
 import { forecast, backtest } from "../lib/forecast";
 import { deduplicatePosts, parseFazeNews, relevantPost, type PostDraft } from "../lib/sync/posts";
+import type { Prepared } from "../lib/sync/prepare";
 
 const at = "2026-11-04T09:00:00Z";
 const raw: RawMatch = { match2id:"final",date:"2026-11-03 10:00:00",finished:"1",winner:"1",bestof:"3",
@@ -103,6 +104,21 @@ async function databaseTests() {
     // Both perspectives of the same real match and the same post must survive.
     await writeMatches(client,FAZE,[normalizeMatch(raw,FAZE)!],bundle,[],at,[]);
     assert.equal((await db.query("SELECT * FROM maps WHERE series_id='final'")).rows.length,2);
+    const bo3Series={...upcoming,id:"bo3-fixture",pageName:"https://bo3.gg/matches/bo3-fixture",maps:[],naviPlayers:[{name:"player",displayname:"player",flag:"",kills:100,deaths:80}]};
+    const bo3Prepared:Prepared={series:bo3Series,winLow:55,winHigh:61,winReasons:["fixture form"],mapsLow:40,mapsHigh:50,
+      mapReasons:["fixture maps"],chain:"fixture brief",oldLow:55,oldHigh:61,oldReasons:["stored"],oldSource:"stored",oldMiss:null,oldNote:null};
+    await writeMatches(client,NAVI,[bo3Series],bundle,[],at,[],[bo3Prepared]);
+    const savedBo3=(await db.query<{chain:string;maps_low:number;verification:{sources:Array<{name:string;url:string}>}}>("SELECT * FROM series WHERE id='bo3-fixture'")).rows[0];
+    assert.equal(savedBo3.chain,"fixture brief");
+    assert.equal(savedBo3.maps_low,40);
+    assert.equal(savedBo3.verification.sources[0].name,"bo3.gg");
+    assert.equal(savedBo3.verification.sources[0].url,bo3Series.pageName);
+    await writeMatches(client,NAVI,[match],bundle,[],at,[]);
+    assert.equal((await db.query<{source_missing:boolean}>("SELECT source_missing FROM series WHERE id='bo3-fixture'")).rows[0].source_missing,false,"a missing LP record must not mark a bo3 record missing");
+    const completed={...bo3Series,finished:true,status:"finished" as const,resultKind:"played" as const,naviScore:2,opponentScore:0,naviWon:true,naviPlayers:[]};
+    await writeMatches(client,NAVI,[completed],bundle,[],at,[],[{...bo3Prepared,series:completed,oldLow:40,oldHigh:46,oldSource:"replay"}]);
+    assert.equal((await db.query<{old_low:number;old_source:string}>("SELECT old_low,old_source FROM series WHERE id='bo3-fixture'")).rows[0].old_low,55,"pre-match stored bands must survive retrospective recalculation");
+    assert.deepEqual((await db.query<{navi_players:unknown[]}>("SELECT navi_players FROM series WHERE id='bo3-fixture'")).rows[0].navi_players,[],"90-day pre-match stats must not become individual match stats");
     const post: PostDraft = {id:"tg:one/1",source:"telegram",author:"Club",title:"CS2",body:"Final",url:"https://t.me/one/1",publishedAt:at,tone:"зібрано"};
     await writePosts(client,"navi",[post]); await writePosts(client,"faze",[post]);
     assert.equal((await db.query("SELECT * FROM posts")).rows.length,2);
@@ -143,9 +159,11 @@ async function databaseTests() {
     // A news outage and a failed NAVI match source must not block FaZe or either roster.
     const savedToken=process.env.PANDASCORE_TOKEN;
     const savedAi=process.env.OPENAI_API_KEY;
+    const savedSource=process.env.MATCH_SOURCE;
     const fixtureWiki=`==Player Roster==\n===Active===\n${Array.from({length:5},(_,i) => `{{Person|id=fixture${i}|flag=ua}}`).join("\n")}\n===Former===`;
     try {
       delete process.env.PANDASCORE_TOKEN;delete process.env.OPENAI_API_KEY;
+      process.env.MATCH_SOURCE="liquipedia";
       globalThis.fetch=async (url,init) => {
         if(String(url).startsWith("https://navi.gg/")) return new Response("outage",{status:503});
         if(String(url).startsWith("https://fazeclan.com/")) return new Response('<feed xmlns="http://www.w3.org/2005/Atom"></feed>');
@@ -171,6 +189,7 @@ async function databaseTests() {
       globalThis.fetch=originalFetch;
       if(savedToken) process.env.PANDASCORE_TOKEN=savedToken;else delete process.env.PANDASCORE_TOKEN;
       if(savedAi) process.env.OPENAI_API_KEY=savedAi;else delete process.env.OPENAI_API_KEY;
+      if(savedSource) process.env.MATCH_SOURCE=savedSource;else delete process.env.MATCH_SOURCE;
     }
   } finally { await db.close(); }
 }

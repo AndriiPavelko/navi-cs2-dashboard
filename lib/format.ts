@@ -170,3 +170,13 @@ export function wikiUrl(page: string): string {
 export function bandText(low: number, high: number): string {
   return `близько ${low}–${high}%`;
 }
+
+/** One readable win percent for each side. The two numbers add up to 100. */
+export function pairPercents(low: number, high: number): { team: number; opponent: number } {
+  const team = Math.min(99, Math.max(1, Math.round((low + high) / 2)));
+  return { team, opponent: 100 - team };
+}
+
+export function midPercent(low: number, high: number): number {
+  return Math.min(99, Math.max(1, Math.round((low + high) / 2)));
+}

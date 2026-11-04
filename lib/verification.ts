@@ -1,6 +1,6 @@
 import type { StoredSeries } from "./sync/normalize";
 import type { TeamProfile } from "./teams";
-import { wikiUrl } from "./format";
+import { matchSource } from "./sources";
 
 export type Evidence = { name: string; url: string; checkedAt: string };
 export type Verification = {
@@ -35,7 +35,7 @@ export function teamKey(name: string): string {
 export function verifyMatch(item: StoredSeries, team: TeamProfile, matches: SecondaryMatch[], checkedAt: string): Verification {
   const result: Verification = {
     state: item.dataIssues.length ? "conflict" : "single_source", details: [...item.dataIssues],
-    sources: [{ name: "Liquipedia", url: wikiUrl(item.pageName || team.page), checkedAt }],
+    sources: [{ ...matchSource(item.pageName,team.page), checkedAt }],
   };
   const candidates = matches.filter((other) => {
     const names = other.opponents.map(({ opponent }) => teamKey(opponent.name));

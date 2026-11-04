@@ -5,6 +5,7 @@ import { berlinLong, wikiUrl } from "../format";
 import { statusLabel, type MatchStatus, type ResultKind } from "../match-status";
 import { sourceFetch } from "./http";
 import type { Evidence, Verification } from "../verification";
+import { usesBo3, matchSource } from "../sources";
 
 export type DigestFact = { id: string; text: string; sources: Evidence[] };
 export type Digest = { mode: "ai" | "facts"; generatedAt: string; warning: string | null; items: DigestFact[] };
@@ -44,15 +45,17 @@ export async function updateDigest(client: PoolClient, team: TeamProfile): Promi
   const previous = (await client.query<{ input_hash: string; payload: Digest & { roster?: string[] } }>("SELECT input_hash,payload FROM digests WHERE team=$1",[team.id])).rows[0];
   const series = (await client.query<{ id: string; played_at: Date; opponent_name: string; navi_score: number | null;
     opponent_score: number | null; status: MatchStatus; result_kind: ResultKind; source_missing: boolean; updated_at: Date; verification: Verification; page_name: string | null }>(
-    `SELECT * FROM series WHERE team=$1 ORDER BY played_at DESC`,[team.id])).rows;
-  const roster = (await client.query<{ nickname: string; updated_at: Date }>("SELECT nickname,updated_at FROM players WHERE team=$1 AND active=TRUE AND NOT is_coach ORDER BY nickname",[team.id])).rows;
+    `SELECT * FROM series WHERE team=$1 AND (COALESCE(page_name,'') LIKE 'https://bo3.gg/%')=$2 ORDER BY played_at DESC`,[team.id,usesBo3()])).rows;
+  const roster = (await client.query<{ nickname: string; updated_at: Date; liquipedia_url:string|null }>("SELECT nickname,updated_at,liquipedia_url FROM players WHERE team=$1 AND active=TRUE AND NOT is_coach ORDER BY nickname",[team.id])).rows;
   const facts: DigestFact[] = [];
   const rosterNames = roster.map((p) => p.nickname);
   if (roster.length) {
     const before = previous?.payload.roster;
     const changed = before?.length && JSON.stringify(before) !== JSON.stringify(rosterNames);
-    facts.push({ id: "roster", text: `${changed ? "Зміна складу в Liquipedia" : "Склад за Liquipedia"}: ${rosterNames.join(", ")}. Другого підтвердження немає.`,
-      sources: [{ name:"Liquipedia",url:wikiUrl(team.page),checkedAt:roster[0].updated_at.toISOString() }] });
+    const bo3 = roster[0].liquipedia_url?.startsWith("https://bo3.gg/");
+    const name = bo3 ? "bo3.gg":"Liquipedia";
+    facts.push({ id: "roster", text: `${changed ? `Зміна складу в ${name}` : `Склад за ${name}`}: ${rosterNames.join(", ")}. Другого підтвердження немає.`,
+      sources: [{ name,url:bo3 ? `https://bo3.gg/teams/${team.bo3Slug}`:wikiUrl(team.page),checkedAt:roster[0].updated_at.toISOString() }] });
   }
   const now = new Date();
   const recent = series.filter((s) => s.played_at <= now).slice(0,3);
@@ -62,7 +65,7 @@ export async function updateDigest(client: PoolClient, team: TeamProfile): Promi
     const conflict = item.verification.state === "conflict";
     const score = item.navi_score != null && item.opponent_score != null ? ` · ${item.navi_score}:${item.opponent_score}` : "";
     facts.push({ id: `match:${item.id}`, text: `${team.label} — ${item.opponent_name}: ${statusLabel(item.status,item.result_kind)}${score}. ${berlinLong(item.played_at.toISOString())}.${item.source_missing ? " Запис відсутній в останній відповіді джерела; статус потребує перевірки." : ""}${conflict ? ` Джерела розходяться: ${item.verification.details.join("; ")}.` : item.verification.state === "single_source" ? " Одне джерело." : " Збігається у двох джерелах."}`,
-      sources: item.verification.sources.length ? item.verification.sources : [{name:"Liquipedia",url:wikiUrl(item.page_name || team.page),checkedAt:item.updated_at.toISOString()}] });
+      sources: item.verification.sources.length ? item.verification.sources : [{...matchSource(item.page_name,team.page),checkedAt:item.updated_at.toISOString()}] });
   }
   const posts = (await client.query<{ id: string; title: string; source: string; url: string; published_at: Date; updated_at: Date }>(
     "SELECT * FROM posts WHERE team=$1 AND source<>'telegram' AND published_at >= NOW()-INTERVAL '7 days' ORDER BY published_at DESC LIMIT 3",[team.id])).rows;
