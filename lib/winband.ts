@@ -16,7 +16,7 @@ export type WinBand = {
   reasons: string[];
 };
 
-const DISCLAIMER = "Це оцінка за відкритою статистикою, не порада для ставок.";
+const DISCLAIMER = "Експериментальна модель. Точність і калібрування ще не підтверджені; відсотки прогнозу приховані.";
 
 export function winDisclaimer(): string {
   return DISCLAIMER;
@@ -52,15 +52,18 @@ export function computeWinBand(input: {
   h2h: RecordLine;
   naviMaps: MapSample[];
   oppMaps: MapSample[];
-}): WinBand {
+}): WinBand | null {
   const label = input.label ?? "NAVI";
   const naviN = played(input.navi);
   const oppN = played(input.opponentForm);
+  if (naviN < 5 || oppN < 5) return null;
   let formDelta = 0;
   const reasons: string[] = [];
 
   if (naviN > 0 && oppN > 0) {
-    formDelta = (winRate(input.navi) - winRate(input.opponentForm)) * 18;
+    // Shrink small samples towards 50%; both sides use the same historical window.
+    const rate = (record: RecordLine) => (record.wins + 2) / (played(record) + 4);
+    formDelta = (rate(input.navi) - rate(input.opponentForm)) * 18;
     reasons.push(
       `Форма: ${label} ${line(input.navi)} з ${naviN}, ${input.opponent} ${line(input.opponentForm)} з ${oppN}`,
     );
@@ -70,9 +73,9 @@ export function computeWinBand(input: {
 
   const h2hN = played(input.h2h);
   let h2hDelta = 0;
-  if (h2hN > 0) {
-    h2hDelta = ((input.h2h.wins - input.h2h.losses) / h2hN) * 12;
-    reasons.push(`Особисті зустрічі 2026: ${line(input.h2h)}`);
+  if (h2hN >= 3) {
+    h2hDelta = ((input.h2h.wins - input.h2h.losses) / (h2hN + 4)) * 12;
+    reasons.push(`Особисті зустрічі за 90 днів: ${line(input.h2h)}`);
   }
 
   const naviByMap = new Map(input.naviMaps.map((sample) => [sample.map.toLowerCase(), sample]));
@@ -86,7 +89,7 @@ export function computeWinBand(input: {
     const navi = naviByMap.get(opp.map.toLowerCase());
     const naviGames = navi ? navi.wins + navi.losses : 0;
     const oppGames = opp.wins + opp.losses;
-    if (!navi || naviGames === 0 || oppGames === 0) continue;
+    if (!navi || naviGames < 5 || oppGames < 5) continue;
     const share = Math.min(naviGames, oppGames);
     weighted += (navi.wins / naviGames - opp.wins / oppGames) * share;
     weight += share;

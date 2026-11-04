@@ -15,6 +15,7 @@ export type RawOpponent = {
 };
 
 export type RawGame = {
+  finished?: string | number | boolean;
   match2gameid?: string | number;
   map?: string;
   winner?: string | number;
@@ -26,6 +27,9 @@ export type RawGame = {
 };
 
 export type RawMatch = {
+  status?: string;
+  extradata?: Record<string, unknown>;
+  walkover?: string | number | boolean;
   match2id?: string;
   pagename?: string;
   date?: string;
@@ -59,7 +63,9 @@ export function asArray<T>(value: unknown): T[] {
 export function isTrackedSide(opponent: RawOpponent, name: string, templatePrefix: string): boolean {
   const sideName = (opponent.name || "").toLowerCase();
   const template = (opponent.template || "").toLowerCase();
-  return sideName === name || template.startsWith(templatePrefix);
+  // An academy/Youth side must never be mistaken for the first team.
+  return sideName === name || (!sideName && (template === templatePrefix ||
+    new RegExp(`^${templatePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\d{4}$`).test(template)));
 }
 
 export function isNaviSide(opponent: RawOpponent): boolean {
@@ -99,6 +105,6 @@ export function sameSide(opponent: RawOpponent, side: SideRef): boolean {
   const name = (opponent.name || "").toLowerCase();
   const template = (opponent.template || "").toLowerCase();
   if (side.name && name === side.name.toLowerCase()) return true;
-  if (side.template && template && template === side.template.toLowerCase()) return true;
+  if (!name && side.template && template && template === side.template.toLowerCase()) return true;
   return false;
 }

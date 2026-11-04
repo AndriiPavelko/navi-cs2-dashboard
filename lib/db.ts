@@ -128,6 +128,41 @@ BEGIN
     ALTER TABLE players ADD PRIMARY KEY (team, id);
   END IF;
 END $$;
+
+ALTER TABLE series ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE series ADD COLUMN IF NOT EXISTS result_kind TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE series ADD COLUMN IF NOT EXISTS source_missing BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE series ADD COLUMN IF NOT EXISTS verification JSONB NOT NULL DEFAULT '{"state":"single_source","details":[],"sources":[]}'::jsonb;
+UPDATE series SET status = CASE WHEN finished THEN 'finished' ELSE 'scheduled' END WHERE status = 'unknown';
+UPDATE series SET result_kind = 'played' WHERE finished AND navi_won IS NOT NULL AND result_kind = 'unknown';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'posts_pkey' AND pg_get_constraintdef(oid) LIKE '%team%') THEN
+    ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_url_key;
+    ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_pkey;
+    ALTER TABLE posts ADD PRIMARY KEY (team, id);
+    ALTER TABLE posts ADD CONSTRAINT posts_team_url_key UNIQUE (team, url);
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS source_checks (
+  team TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  attempted_at TIMESTAMPTZ NOT NULL,
+  succeeded_at TIMESTAMPTZ,
+  error TEXT,
+  warnings JSONB NOT NULL DEFAULT '[]'::jsonb,
+  PRIMARY KEY (team, scope)
+);
+
+CREATE TABLE IF NOT EXISTS digests (
+  team TEXT PRIMARY KEY,
+  input_hash TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
 
 export async function ensureSchema(client?: PoolClient): Promise<void> {

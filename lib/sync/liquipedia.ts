@@ -1,20 +1,19 @@
 import type { TeamProfile } from "../teams";
 import { NAVI } from "../teams";
 import type { RawMatch, RawPerson } from "./raw";
+import { sourceFetch } from "./http";
 
 const API = "https://liquipedia.net/counterstrike/api.php";
 
 export const LIQUIPEDIA_UA =
   "NAVI-CS2-Dashboard/1.0 (personal non-commercial CS2 fan dashboard; +https://navi.gg)";
 
-let nextSlot = 0;
+let queue: Promise<void> = Promise.resolve();
 
 async function pace(): Promise<void> {
-  const now = Date.now();
-  if (now < nextSlot) {
-    await new Promise((resolve) => setTimeout(resolve, nextSlot - now));
-  }
-  nextSlot = Date.now() + 2000;
+  const slot = queue;
+  queue = slot.then(() => new Promise<void>((resolve) => setTimeout(resolve, 2000)));
+  await slot;
 }
 
 type WikiPage = {
@@ -33,7 +32,7 @@ type MwResponse = {
 
 async function mediawiki(body: Record<string, string>): Promise<MwResponse> {
   await pace();
-  const response = await fetch(API, {
+  const response = await sourceFetch(API, {
     method: "POST",
     cache: "no-store",
     headers: {
@@ -47,7 +46,9 @@ async function mediawiki(body: Record<string, string>): Promise<MwResponse> {
   if (!response.ok) {
     throw new Error(`Liquipedia відповіла ${response.status}`);
   }
-  return (await response.json()) as MwResponse;
+  const data = (await response.json()) as MwResponse;
+  if (data.error) throw new Error(data.error.info || "Помилка API Liquipedia");
+  return data;
 }
 
 async function runLua(question: string): Promise<unknown> {
@@ -72,12 +73,20 @@ function seasonLua(team: TeamProfile): string {
   return `= (function()
   local lpdb = mw.ext.LiquipediaDB.lpdb
   local ok, res = pcall(function()
-    local matches = lpdb("match2", {
+    local matches = {}
+    local complete = false
+    for offset = 0, 9500, 500 do
+    local page = lpdb("match2", {
       conditions = [=[ [[date::>2025-12-31]] AND [[opponent::${team.page}]] ]=],
-      query = "match2id, pagename, date, winner, tournament, section, bestof, finished, type, liquipediatier, liquipediatiertype, vod, match2opponents, match2games",
+      query = "match2id, pagename, date, winner, tournament, section, bestof, finished, type, extradata, liquipediatier, liquipediatiertype, vod, match2opponents, match2games",
       limit = 500,
+      offset = offset,
       order = "date asc",
     })
+    for _, m in ipairs(page) do table.insert(matches, m) end
+    if #page < 500 then complete = true break end
+    end
+    if not complete then error("Season pagination limit exceeded") end
     local wanted = {}
     for _, m in ipairs(matches) do
       if tostring(m.finished) ~= "1" then
@@ -95,9 +104,9 @@ function seasonLua(team: TeamProfile): string {
     for name, _ in pairs(wanted) do
       if not name:find("[%[%]]") and not name:find('"') then
         forms[name] = lpdb("match2", {
-          conditions = "[[opponent::" .. name .. "]] AND [[finished::1]]",
-          query = "match2id, date, winner, finished, bestof, tournament, match2opponents, match2games",
-          limit = 10,
+          conditions = "[[opponent::" .. name .. "]] AND [[finished::1]] AND [[date::>${new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)}]]",
+          query = "match2id, date, winner, finished, bestof, tournament, extradata, match2opponents, match2games",
+          limit = 500,
           order = "date desc",
         })
       end
@@ -146,6 +155,27 @@ export async function fetchTeamWiki(team: TeamProfile = NAVI): Promise<string> {
   });
   const page = (data.query?.pages ?? [])[0];
   return page?.revisions?.[0]?.slots?.main?.content ?? "";
+}
+
+/** Separate, explicit historical export for walk-forward evaluation; not part of frequent sync. */
+export async function fetchHistoricalMatches(since: string): Promise<RawMatch[]> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error("Дата має бути YYYY-MM-DD");
+  const all: RawMatch[] = [];
+  for (let offset = 0; offset < 20000; offset += 100) {
+    const question = `= (function()
+      local rows = mw.ext.LiquipediaDB.lpdb("match2", {
+        conditions = "[[finished::1]] AND [[date::>${since}]]",
+        query = "match2id, date, winner, finished, bestof, extradata, match2opponents, match2games",
+        limit = 100, offset = ${offset}, order = "date asc, match2id asc",
+      })
+      return mw.text.jsonEncode(rows)
+    end)()`;
+    const rows = await runLua(question);
+    if (!Array.isArray(rows)) throw new Error("Неповна історична вибірка Liquipedia");
+    all.push(...rows as RawMatch[]);
+    if (rows.length < 100) return [...new Map(all.map((row) => [row.match2id,row])).values()];
+  }
+  throw new Error("Історична вибірка перевищила ліміт; звузь діапазон дат");
 }
 
 export async function fetchPlayers(ids: string[]): Promise<RawPerson[]> {

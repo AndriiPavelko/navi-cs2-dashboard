@@ -1,3 +1,6 @@
+import type { MatchStatus, ResultKind } from "./match-status";
+import type { Verification } from "./verification";
+
 export type PersonInMatch = {
   name: string;
   displayname: string;
@@ -16,6 +19,11 @@ export type MapVM = {
 };
 
 export type SeriesVM = {
+  status: MatchStatus;
+  resultKind: ResultKind;
+  sourceMissing: boolean;
+  checkedAt: string;
+  verification: Verification;
   team: "navi" | "faze";
   id: string;
   at: string;
@@ -65,6 +73,8 @@ export type PostVM = {
 };
 
 export type SeasonStats = {
+  unknown: number;
+  walkovers: number;
   series: number;
   wins: number;
   losses: number;

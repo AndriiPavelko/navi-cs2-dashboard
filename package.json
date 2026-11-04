@@ -7,15 +7,21 @@
     "build": "next build",
     "start": "next start",
     "sync": "tsx scripts/sync.ts",
-    "test": "tsx scripts/logic.test.ts"
+    "sync:watch": "tsx scripts/watch.ts",
+    "backtest": "tsx scripts/backtest.ts",
+    "check:sources": "tsx scripts/check-sources.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx scripts/logic.test.ts && tsx scripts/reliability.test.ts"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.12.0",
     "next": "^15.5.4",
     "pg": "^8.16.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
     "@types/node": "^22.15.30",
     "@types/pg": "^8.15.5",
     "@types/react": "^19.1.8",

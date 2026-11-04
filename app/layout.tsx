@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Manrope, Unbounded } from "next/font/google";
 import { Shell } from "@/components/shell";
 import { ensureSchema } from "@/lib/db";
-import { getLastSync } from "@/lib/data";
+import { getSourceChecks } from "@/lib/data";
+import type { SourceCheck } from "@/lib/sync/schedule";
 import "./globals.css";
 
 const body = Manrope({
@@ -19,7 +20,7 @@ const display = Unbounded({
 
 export const metadata: Metadata = {
   title: "NAVI · FaZe CS2",
-  description: "Мобільний дашборд NAVI і FaZe CS2: сезон 2026, шанс серії і пульс публічних дописів.",
+  description: "NAVI і FaZe CS2: матчі сезону 2026, склад, перевірки джерел і зведення з посиланнями.",
 };
 
 export const viewport: Viewport = {
@@ -31,11 +32,11 @@ export const viewport: Viewport = {
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  let syncedAt: string | null = null;
+  let checks: SourceCheck[] = [];
   let dbError: string | null = null;
   try {
     await ensureSchema();
-    syncedAt = await getLastSync();
+    checks = await getSourceChecks();
   } catch {
     dbError = "База недоступна. Перевір DATABASE_URL і що Postgres запущений.";
   }
@@ -43,7 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="uk" className={`${body.variable} ${display.variable}`}>
       <body>
-        <Shell syncedAt={syncedAt} dbError={dbError}>
+        <Shell checks={checks} dbError={dbError}>
           {children}
         </Shell>
       </body>

@@ -7,10 +7,13 @@ export function seasonStats(series: SeriesVM[]): SeasonStats {
     .sort((a, b) => b.at.localeCompare(a.at));
   const wins = finished.filter((item) => item.naviWon === true).length;
   const losses = finished.filter((item) => item.naviWon === false).length;
-  const draws = finished.length - wins - losses;
+  const draws = finished.filter((item) => item.resultKind === "draw").length;
+  const unknown = finished.filter((item) => item.resultKind === "unknown").length;
+  const walkovers = finished.filter((item) => item.resultKind === "walkover").length;
   let mapWins = 0;
   let mapLosses = 0;
   for (const item of finished) {
+    if (item.resultKind === "walkover" || item.resultKind === "unknown") continue;
     for (const map of item.maps) {
       if (map.naviWon === true) mapWins += 1;
       else if (map.naviWon === false) mapLosses += 1;
@@ -18,6 +21,8 @@ export function seasonStats(series: SeriesVM[]): SeasonStats {
   }
   const decided = wins + losses;
   return {
+    unknown,
+    walkovers,
     series: finished.length,
     wins,
     losses,

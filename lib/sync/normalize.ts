@@ -1,4 +1,5 @@
 import { tierLabel } from "../format";
+import type { MatchStatus, ResultKind } from "../match-status";
 import { NAVI, type TeamProfile } from "../teams";
 import type { MapSample, RecordLine } from "../winband";
 import {
@@ -33,6 +34,9 @@ export type StoredMap = {
 };
 
 export type StoredSeries = {
+  dataIssues: string[];
+  status: MatchStatus;
+  resultKind: ResultKind;
   id: string;
   at: Date;
   tournament: string;
@@ -52,11 +56,35 @@ export type StoredSeries = {
   maps: StoredMap[];
 };
 
-function scoreValue(value: unknown): number | null {
-  if (value == null || value === "") return null;
+export function scoreValue(value: unknown): number | null {
+  if (value == null || typeof value === "boolean" || String(value).trim() === "") return null;
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return Math.round(parsed);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+export function matchDate(value: string | undefined): Date | null {
+  if (!value?.trim()) return null;
+  const iso = value.trim().replace(" ", "T");
+  const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso) ? iso : `${iso}Z`);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+export function matchStatus(raw: RawMatch): MatchStatus {
+  const status = String(raw.status ?? raw.extradata?.status ?? "").toLowerCase();
+  if (/^(cancelled|canceled)$/.test(status)) return "cancelled";
+  if (status === "postponed") return "postponed";
+  if (isFinished(raw) || status === "finished") return "finished";
+  if (/^(running|live|ongoing)$/.test(status)) return "running";
+  return !status || /^(scheduled|not_started)$/.test(status) ? "scheduled" : "unknown";
+}
+
+export function isWalkover(raw: RawMatch): boolean {
+  return [true, 1, "1", "true"].includes(raw.walkover ?? false) ||
+    /^(walkover|forfeit|wo)$/i.test(String(raw.extradata?.resulttype ?? "")) ||
+    asArray<RawOpponent>(raw.match2opponents).some((side) =>
+      /^(ff|forfeit|dq|disqualified|wo|walkover)$/i.test(String(side.status ?? "")) ||
+      /^(w|ff|dq|wo)$/i.test(String(side.score ?? "")));
 }
 
 function clean(value: unknown): string {
@@ -93,11 +121,14 @@ function mapScores(game: RawGame, naviIndex: number): { navi: number | null; opp
   return { navi: null, opp: null };
 }
 
-export function normalizeMatch(raw: RawMatch, team: TeamProfile = NAVI): StoredSeries | null {
+export function normalizeMatch(raw: RawMatch, team: TeamProfile = NAVI, asOf = new Date()): StoredSeries | null {
   const id = clean(raw.match2id);
   const when = clean(raw.date);
   if (!id || !when) return null;
+  const at = matchDate(when);
+  if (!at) return null;
   const opponents = asArray<RawOpponent>(raw.match2opponents);
+  if (opponents.length !== 2) return null;
   const naviIndex = opponents.findIndex((opponent) =>
     isTrackedSide(opponent, team.name, team.templatePrefix),
   );
@@ -105,25 +136,41 @@ export function normalizeMatch(raw: RawMatch, team: TeamProfile = NAVI): StoredS
   const opponent = opponents.find((side, index) => index !== naviIndex);
   if (!opponent || !clean(opponent.name)) return null;
 
-  const finished = isFinished(raw);
+  let status = matchStatus(raw);
+  const dataIssues: string[] = [];
+  const futureResult = status === "finished" && at.getTime() > asOf.getTime() + 5 * 60000;
+  if (futureResult) {
+    status = "unknown";
+    dataIssues.push("Джерело вказало завершений результат для майбутнього матчу");
+  }
+  const finished = status === "finished";
   const naviScore = finished ? scoreValue(opponents[naviIndex]?.score) : null;
   const opponentScore = finished ? scoreValue(opponent.score) : null;
   let naviWon: boolean | null = null;
   if (finished) {
     const winner = Number(raw.winner);
-    if (Number.isFinite(winner) && winner > 0) naviWon = winner - 1 === naviIndex;
+    if (winner === 1 || winner === 2) naviWon = winner - 1 === naviIndex;
     else if (naviScore != null && opponentScore != null && naviScore !== opponentScore) {
       naviWon = naviScore > opponentScore;
     }
   }
+  if (naviWon != null && !isWalkover(raw) && naviScore != null && opponentScore != null &&
+    (naviScore === opponentScore || naviWon !== (naviScore > opponentScore))) {
+    dataIssues.push("Переможець у джерелі суперечить рахунку");
+    naviWon = null;
+  }
+  const resultKind: ResultKind = !finished ? "unknown" : isWalkover(raw) ? "walkover" :
+    naviWon != null ? "played" : !dataIssues.length && naviScore != null && naviScore > 0 && naviScore === opponentScore &&
+      Number(raw.bestof) % 2 === 0 && naviScore + opponentScore === Number(raw.bestof) ? "draw" : "unknown";
 
   const best = Number(raw.bestof);
   const maps = asArray<RawGame>(raw.match2games).map((game, index) => {
-    const scores = mapScores(game, naviIndex);
+    const scores = futureResult ? {navi:null,opp:null} : mapScores(game, naviIndex);
     const winner = Number(game.winner);
     let won: boolean | null = null;
-    if (Number.isFinite(winner) && winner > 0) won = winner - 1 === naviIndex;
-    else if (scores.navi != null && scores.opp != null && scores.navi !== scores.opp) {
+    const gameFinished = !futureResult && (finished || String(game.finished) === "1" || game.finished === true);
+    if (gameFinished && (winner === 1 || winner === 2)) won = winner - 1 === naviIndex;
+    else if (gameFinished && scores.navi != null && scores.opp != null && scores.navi !== scores.opp) {
       won = scores.navi > scores.opp;
     }
     const gameId = game.match2gameid ?? index + 1;
@@ -138,10 +185,10 @@ export function normalizeMatch(raw: RawMatch, team: TeamProfile = NAVI): StoredS
     };
   });
 
-  const at = new Date(when.replace(" ", "T") + "Z");
-  if (Number.isNaN(at.getTime())) return null;
-
   return {
+    dataIssues,
+    status,
+    resultKind,
     id,
     at,
     tournament: clean(raw.tournament) || "Турнір",
@@ -168,15 +215,22 @@ export function normalizeMatch(raw: RawMatch, team: TeamProfile = NAVI): StoredS
 export function recordFromRaw(matches: RawMatch[], side: SideRef): RecordLine {
   const line: RecordLine = { wins: 0, losses: 0, draws: 0 };
   for (const match of matches) {
-    if (!isFinished(match)) continue;
+    if (matchStatus(match) !== "finished" || isWalkover(match)) continue;
     const opponents = asArray<RawOpponent>(match.match2opponents);
     const index = opponents.findIndex((opponent) => sameSide(opponent, side));
     if (index < 0) continue;
     const winner = Number(match.winner);
-    if (Number.isFinite(winner) && winner > 0) {
+    if (winner === 1 || winner === 2) {
       if (winner - 1 === index) line.wins += 1;
       else line.losses += 1;
-    } else line.draws += 1;
+    } else {
+      const left = scoreValue(opponents[index]?.score);
+      const right = scoreValue(opponents[index === 0 ? 1 : 0]?.score);
+      if (left == null || right == null) continue;
+      if (left > right) line.wins += 1;
+      else if (left < right) line.losses += 1;
+      else line.draws += 1;
+    }
   }
   return line;
 }
@@ -184,7 +238,7 @@ export function recordFromRaw(matches: RawMatch[], side: SideRef): RecordLine {
 export function mapsFromSeries(series: StoredSeries[]): MapSample[] {
   const bucket = new Map<string, MapSample>();
   for (const item of series) {
-    if (!item.finished) continue;
+    if (!item.finished || item.resultKind === "walkover" || item.resultKind === "unknown") continue;
     for (const map of item.maps) {
       if (map.naviWon == null) continue;
       const key = map.mapName.toLowerCase();
@@ -200,7 +254,7 @@ export function mapsFromSeries(series: StoredSeries[]): MapSample[] {
 export function mapsFromRaw(matches: RawMatch[], side: SideRef): MapSample[] {
   const bucket = new Map<string, MapSample>();
   for (const match of matches) {
-    if (!isFinished(match)) continue;
+    if (matchStatus(match) !== "finished" || isWalkover(match)) continue;
     const opponents = asArray<RawOpponent>(match.match2opponents);
     const index = opponents.findIndex((opponent) => sameSide(opponent, side));
     if (index < 0) continue;

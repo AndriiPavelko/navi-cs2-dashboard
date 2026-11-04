@@ -5,6 +5,8 @@ import { bandText, berlinClock, berlinLong, dateBadge, pillsFor, wikiUrl } from 
 import { matchHref, TEAMS } from "@/lib/teams";
 import { winDisclaimer } from "@/lib/winband";
 import type { SeriesVM } from "@/lib/types";
+import { isUpcoming, statusLabel } from "@/lib/match-status";
+import { verificationLabel } from "@/lib/verification";
 
 export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; heading?: "h1" | "h2" }) {
   const pills = pillsFor(series);
@@ -28,24 +30,28 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
           <Score series={series} />
           {seriesLengthFact(series) ? <p className="note">{seriesLengthFact(series)}</p> : null}
         </>
-      ) : (
+      ) : isUpcoming(series) ? (
         <>
-          <Countdown iso={series.at} />
+          {series.status === "running" ? <p className="note">Матч триває. Рахунок очікує перевірки джерела.</p> : <Countdown iso={series.at} />}
           {series.winLow != null && series.winHigh != null ? (
-            <WinBand low={series.winLow} high={series.winHigh} reasons={series.reasons} />
-          ) : null}
-          {series.bestOf === 3 && series.mapsLow != null && series.mapsHigh != null ? (
-            <MapDistance low={series.mapsLow} high={series.mapsHigh} reasons={series.mapReasons} />
-          ) : null}
-          {series.winLow != null || series.mapsLow != null ? <p className="disclaimer">{winDisclaimer()}</p> : null}
+            <div className="band"><p className="lean">Форма за останні 90 днів</p><ul className="reasons">{series.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>
+          ) : series.status === "scheduled" ? <p className="note">Недостатньо перевірених даних для порівняння форми.</p> : null}
+          <p className="disclaimer">{winDisclaimer()}</p>
         </>
-      )}
+      ) : <p className="note">{statusLabel(series.status)}{series.status === "scheduled" ? " · очікуємо уточнення часу або результату" : ""}</p>}
+      <div className="verification" data-state={series.verification.state}>
+        <strong>{verificationLabel(series.verification.state)}</strong>
+        <p>Перевірено: {berlinLong(series.checkedAt)}</p>
+        {series.sourceMissing ? <p>Матчу немає в останній відповіді джерела. Запис збережено; статус потребує перевірки.</p> : null}
+        {series.verification.details.map((detail) => <p key={detail}>{detail}</p>)}
+        {series.verification.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.name}</a>)}
+      </div>
     </article>
   );
 }
 
 export function Score({ series }: { series: SeriesVM }) {
-  const outcome = series.naviWon === true ? "Перемога" : series.naviWon === false ? "Поразка" : "Нічия";
+  const outcome = series.resultKind === "walkover" ? `Технічний результат${series.naviWon === true ? " · перемога" : series.naviWon === false ? " · поразка" : ""}` : series.naviWon === true ? "Перемога" : series.naviWon === false ? "Поразка" : statusLabel(series.status,series.resultKind);
   return (
     <div className={`scoreline ${series.naviWon === true ? "won" : series.naviWon === false ? "lost" : ""}`}>
       <p className="outcome">{outcome}</p>
@@ -108,7 +114,7 @@ export function MapDistance({ low, high, reasons }: { low: number; high: number;
 }
 
 export function seriesLengthFact(series: SeriesVM): string | null {
-  if (!series.finished || series.bestOf !== 3) return null;
+  if (!series.finished || series.resultKind !== "played" || series.bestOf !== 3) return null;
   if (series.naviScore == null || series.oppScore == null) return null;
   const high = Math.max(series.naviScore, series.oppScore);
   const low = Math.min(series.naviScore, series.oppScore);
@@ -131,12 +137,12 @@ export function SeriesList({ title, items }: { title: string; items: SeriesVM[] 
                 <strong>{series.opponent}</strong>
                 <em>{series.eventLabel}</em>
               </span>
-              <span className={`row-end ${series.finished ? (series.naviWon ? "won" : "lost") : ""}`}>
+              <span className={`row-end ${series.finished ? (series.naviWon === true ? "won" : series.naviWon === false ? "lost" : "") : ""}`}>
                 {series.finished
                   ? `${series.naviScore ?? "–"}:${series.oppScore ?? "–"}`
-                  : series.winLow != null && series.winHigh != null
-                    ? bandText(series.winLow, series.winHigh)
-                    : berlinClock(series.at)}
+                  : isUpcoming(series) && series.status === "scheduled" ? berlinClock(series.at) : statusLabel(series.status)}
+                {series.sourceMissing ? <small> · потребує перевірки</small> : null}
+                {series.verification.state === "conflict" ? <small> · розбіжність</small> : null}
               </span>
             </Link>
           </li>

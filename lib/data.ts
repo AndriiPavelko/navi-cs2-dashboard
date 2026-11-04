@@ -3,8 +3,16 @@ import { query } from "./db";
 import { eventLabel } from "./format";
 import type { TeamId } from "./teams";
 import type { MapVM, PersonInMatch, PlayerVM, PostVM, SeriesVM } from "./types";
+import type { SourceCheck } from "./sync/schedule";
+import type { Digest } from "./sync/summary";
+import { deduplicatePosts } from "./sync/posts";
 
 type SeriesRow = {
+  status: SeriesVM["status"];
+  result_kind: SeriesVM["resultKind"];
+  source_missing: boolean;
+  updated_at: Date;
+  verification: SeriesVM["verification"];
   team: TeamId;
   id: string;
   played_at: Date;
@@ -70,6 +78,11 @@ export const getAllSeries = cache(async (team: TeamId): Promise<SeriesVM[]> => {
     bySeries.set(map.series_id, list);
   }
   return series.map((row) => ({
+    status: row.status,
+    resultKind: row.result_kind,
+    sourceMissing: row.source_missing,
+    checkedAt: new Date(row.updated_at).toISOString(),
+    verification: row.verification,
     team: row.team,
     id: row.id,
     at: new Date(row.played_at).toISOString(),
@@ -131,7 +144,7 @@ export const getPosts = cache(async (team: TeamId): Promise<PostVM[]> => {
     published_at: Date | null;
     tone: PostVM["tone"];
   }>("SELECT * FROM posts WHERE team = $1 ORDER BY published_at DESC NULLS LAST LIMIT 40", [team]);
-  return rows.map((row) => ({
+  const posts = rows.map((row) => ({
     id: row.id,
     source: row.source,
     author: row.author,
@@ -141,6 +154,18 @@ export const getPosts = cache(async (team: TeamId): Promise<PostVM[]> => {
     publishedAt: row.published_at ? new Date(row.published_at).toISOString() : null,
     tone: row.tone,
   }));
+  return deduplicatePosts(posts.map((p) => ({ ...p,title:p.title || "",body:p.body || "" })));
+});
+
+export const getSourceChecks = cache(async (): Promise<SourceCheck[]> => {
+  const rows = await query<{ team: string; scope: SourceCheck["scope"]; attempted_at: Date; succeeded_at: Date | null; error: string | null; warnings: string[] }>("SELECT * FROM source_checks");
+  return rows.map((row) => ({ team:row.team,scope:row.scope,attemptedAt:row.attempted_at.toISOString(),
+    succeededAt:row.succeeded_at?.toISOString() ?? null,error:row.error,warnings:row.warnings }));
+});
+
+export const getDigest = cache(async (team: TeamId): Promise<Digest | null> => {
+  const rows = await query<{ payload: Digest }>("SELECT payload FROM digests WHERE team=$1",[team]);
+  return rows[0]?.payload ?? null;
 });
 
 export const getLastSync = cache(async (): Promise<string | null> => {

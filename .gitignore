@@ -4,3 +4,5 @@ node_modules
 *.log
 tsconfig.tsbuildinfo
 next-env.d.ts
+reports/
+.cache/

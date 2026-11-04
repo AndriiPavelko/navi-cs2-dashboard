@@ -3,7 +3,7 @@ import { runSync } from "@/lib/sync/run";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -17,7 +17,7 @@ async function handle(request: Request) {
   }
   try {
     const summary = await runSync();
-    return NextResponse.json({ ok: true, ...summary });
+    return NextResponse.json({ ok: summary.errors.length === 0, ...summary }, { status: summary.errors.length ? 207 : 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "sync failed";
     return NextResponse.json({ ok: false, error: message.slice(0, 500) }, { status: 500 });

@@ -5,11 +5,13 @@ import { getAllSeries, getPlayers, getPosts } from "@/lib/data";
 import { berlinLong, joinLabel, percent, roleLabel } from "@/lib/format";
 import { killDeath, playedIn, seasonStats } from "@/lib/stats";
 import { playerHref, teamHref, TEAMS, type TeamId } from "@/lib/teams";
+import { isUpcoming } from "@/lib/match-status";
+import { TeamDigest } from "./team-digest";
 
 export async function HomeScreen({ team }: { team: TeamId }) {
   const profile = TEAMS[team];
   const series = await getAllSeries(team);
-  const upcoming = series.filter((item) => !item.finished).sort((a, b) => a.at.localeCompare(b.at));
+  const upcoming = series.filter((item) => isUpcoming(item)).sort((a, b) => a.at.localeCompare(b.at));
   const finished = series.filter((item) => item.finished).sort((a, b) => b.at.localeCompare(a.at));
   const next = upcoming[0] ?? finished[0] ?? null;
   const stats = seasonStats(series);
@@ -59,12 +61,15 @@ export async function HomeScreen({ team }: { team: TeamId }) {
           </div>
         </dl>
         {stats.draws ? <p className="note">Нічиї: {stats.draws}. У вінрейт вони не входять.</p> : null}
+        {stats.unknown ? <p className="note">Результат уточнюється: {stats.unknown}. Ці серії не входять у вінрейт.</p> : null}
+        {stats.walkovers ? <p className="note">Технічні результати: {stats.walkovers}. Показані окремо у картках; у форму для прогнозу не входять.</p> : null}
         <p className="note">
           Вінрейт серій {percent(stats.wins, stats.wins + stats.losses)}. Карти рахуються лише там, де Liquipedia дала
           переможця.
         </p>
       </section>
       <SeriesList title={later.length ? "Далі в розкладі" : "Останні серії"} items={later.length ? later : recent} />
+      <TeamDigest team={team} />
     </>
   );
 }
@@ -72,8 +77,9 @@ export async function HomeScreen({ team }: { team: TeamId }) {
 export async function MatchesScreen({ team }: { team: TeamId }) {
   const profile = TEAMS[team];
   const series = await getAllSeries(team);
-  const upcoming = series.filter((item) => !item.finished).sort((a, b) => a.at.localeCompare(b.at));
+  const upcoming = series.filter((item) => isUpcoming(item)).sort((a, b) => a.at.localeCompare(b.at));
   const finished = series.filter((item) => item.finished).sort((a, b) => b.at.localeCompare(a.at));
+  const unresolved = series.filter((item) => !item.finished && !isUpcoming(item));
 
   return (
     <>
@@ -81,6 +87,7 @@ export async function MatchesScreen({ team }: { team: TeamId }) {
       <p className="lede">Усі серії {profile.label} CS2 з 1 січня 2026. Час — за Берліном.</p>
       {upcoming.length ? <SeriesList title="Далі" items={upcoming} /> : <p className="note">Майбутніх серій у джерелі зараз немає.</p>}
       <SeriesList title="Зіграні" items={finished} />
+      <SeriesList title="Скасовані, перенесені та записи для уточнення" items={unresolved} />
       {!series.length ? <p className="note">Після синку тут з’являться матчі сезону.</p> : null}
     </>
   );
@@ -114,7 +121,7 @@ export async function PlayersScreen({ team }: { team: TeamId }) {
   return (
     <>
       <h1>Гравці</h1>
-      <p className="lede">Активний склад CS2 з Liquipedia. Якщо джерело змінить ростер, наступний синк теж змінить його.</p>
+      <p className="lede">Активний склад CS2 за Liquipedia. Другого офіційного підтвердження немає. Неповна відповідь джерела не замінює збережений склад.</p>
       {players.length ? (
         <ul className="roster">
           {players.map((player) => (
@@ -217,7 +224,7 @@ export async function PulseScreen({ team }: { team: TeamId }) {
   const lede =
     team === "navi"
       ? "Публічні новини navi.gg і Telegram-канали клубу та гравців, які Liquipedia вказує на їхніх сторінках. X і Instagram не читаємо: офіційного ключа немає."
-      : "Публічні Telegram-канали клубу та гравців, які Liquipedia вказує на їхніх сторінках. X і Instagram не читаємо: офіційного ключа немає.";
+      : "Офіційна Atom-стрічка fazeclan.com та доступні Telegram-канали зі сторінок клубу й гравців у Liquipedia. Показуємо дописи з ознаками тематики CS2. Стрічка клубу може не містити таких новин; X та Instagram не підключені.";
   return (
     <>
       <h1>Пульс</h1>
@@ -239,7 +246,7 @@ export async function PulseScreen({ team }: { team: TeamId }) {
                 <article>
                   <div className="feed-top">
                     <span data-tone={post.tone}>{post.tone}</span>
-                    <span className="src">{post.source === "telegram" ? "Telegram" : "navi.gg"}</span>
+                    <span className="src">{post.source === "telegram" ? "Telegram" : post.source}</span>
                   </div>
                   {bodyRepeatsTitle ? (
                     <p>{body}</p>

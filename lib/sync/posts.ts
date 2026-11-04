@@ -1,9 +1,11 @@
 import { classifyTone, type Tone } from "../tone";
 import { LIQUIPEDIA_UA } from "./liquipedia";
+import { sourceFetch } from "./http";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 export type PostDraft = {
   id: string;
-  source: "navi.gg" | "telegram";
+  source: "navi.gg" | "telegram" | "fazeclan.com";
   author: string;
   title: string;
   body: string;
@@ -39,7 +41,7 @@ function decode(value: string): string {
 
 export async function fetchNaviNews(): Promise<PostDraft[]> {
   const url = "https://navi.gg/api/client/publications/news?lang=ua&page=1&perPage=12&game=cs2";
-  const response = await fetch(url, {
+  const response = await sourceFetch(url, {
     cache: "no-store",
     headers: {
       "User-Agent": LIQUIPEDIA_UA,
@@ -60,7 +62,7 @@ export async function fetchNaviNews(): Promise<PostDraft[]> {
       author: "NAVI",
       title: item.title.trim(),
       body: summary,
-      url: item.uri,
+      url: new URL(item.uri, "https://navi.gg").href,
       publishedAt: item.post_at_iso || null,
       tone: classifyTone(`${item.title}\n${summary}`),
     });
@@ -94,10 +96,53 @@ export function parseTelegram(html: string, channel: string): PostDraft[] {
 }
 
 export async function fetchTelegramChannel(channel: string): Promise<PostDraft[]> {
-  const response = await fetch(`https://t.me/s/${channel}`, {
+  const response = await sourceFetch(`https://t.me/s/${channel}`, {
     cache: "no-store",
     headers: { "User-Agent": LIQUIPEDIA_UA, Accept: "text/html" },
   });
   if (!response.ok) throw new Error(`Telegram ${channel} відповів ${response.status}`);
   return parseTelegram(await response.text(), channel);
+}
+
+export function relevantPost(post: Pick<PostDraft, "title" | "body">, nicknames: string[] = []): boolean {
+  const text = `${post.title} ${post.body}`.toLowerCase();
+  if (/\bcs2\b|\bcs:go\b|counter[ -]strike|\biem\b|\besl\b|\bblast\b|\bpgl\b/.test(text)) return true;
+  return nicknames.some((nick) => nick.length >= 3 && new RegExp(`(?:^|[^a-z0-9])${nick.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|[^a-z0-9])`, "i").test(text));
+}
+
+export function parseFazeNews(xml: string): PostDraft[] {
+  if (XMLValidator.validate(xml) !== true) throw new Error("FaZe: некоректна Atom-стрічка");
+  const parsed = new XMLParser({ ignoreAttributes: false, processEntities: true }).parse(xml);
+  if (!parsed.feed) throw new Error("FaZe не повернула Atom-стрічку");
+  const entries = parsed.feed.entry ? (Array.isArray(parsed.feed.entry) ? parsed.feed.entry : [parsed.feed.entry]) : [];
+  return entries.flatMap((entry: Record<string, unknown>) => {
+    const links = Array.isArray(entry.link) ? entry.link : [entry.link];
+    const link = links.find((item) => item?.["@_rel"] === "alternate") ?? links[0];
+    const url = String(link?.["@_href"] ?? "");
+    if (!url.startsWith("https://fazeclan.com/")) return [];
+    const content = entry.content ?? entry.summary ?? "";
+    const title = decode(String(entry.title ?? ""));
+    const body = decode(typeof content === "object" && content ? String((content as Record<string, unknown>)["#text"] ?? "") : String(content));
+    const published = String(entry.published ?? entry.updated ?? "");
+    return [{ id: `faze-news:${String(entry.id ?? url)}`, source: "fazeclan.com" as const, author: "FaZe Clan", title, body: body.slice(0, 1500), url,
+      publishedAt: Number.isFinite(Date.parse(published)) ? new Date(published).toISOString() : null, tone: classifyTone(`${title}\n${body}`) }];
+  });
+}
+
+export async function fetchFazeNews(): Promise<PostDraft[]> {
+  const response = await sourceFetch("https://fazeclan.com/blogs/news.atom", {
+    cache: "no-store", headers: { "User-Agent": LIQUIPEDIA_UA, Accept: "application/atom+xml" },
+  });
+  return parseFazeNews(await response.text()).filter((post) => relevantPost(post));
+}
+
+export function deduplicatePosts<T extends Pick<PostDraft, "url" | "title" | "body">>(posts: T[]): T[] {
+  const seen = new Set<string>();
+  return posts.filter((post) => {
+    const normalized = `${post.title} ${post.body}`.toLowerCase().replace(/https?:\/\/\S+/g, "").replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 200);
+    const contentKey = normalized.length >= 40 ? `text:${normalized}` : `url:${post.url}`;
+    if (seen.has(post.url) || seen.has(contentKey)) return false;
+    seen.add(post.url); seen.add(contentKey);
+    return true;
+  });
 }

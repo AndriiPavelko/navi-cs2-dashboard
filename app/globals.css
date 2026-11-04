@@ -222,6 +222,19 @@ h1 { font-size: 32px; line-height: 1.05; }
 }
 .credit a { font-weight: 800; color: var(--ink); }
 .banner { background: #f3d2c6; border: 1.5px solid var(--ink); padding: 8px 10px; margin-bottom: 12px; }
+.source-status { margin-bottom: 16px; border: 1.5px solid var(--ink); padding: 10px; background: var(--paper); font-size: 12px; }
+.source-status summary { cursor: pointer; font-weight: 800; min-height: 24px; }
+.source-status.attention { background: #f3d2c6; }
+.source-check { border-top: 1px solid var(--muted); margin-top: 8px; padding-top: 8px; }
+.source-check p { margin-top: 4px; overflow-wrap: anywhere; }
+.source-error { color: var(--loss); font-weight: 700; }
+.verification { margin-top: 12px; border-top: 1px solid var(--muted); padding-top: 8px; font-size: 12px; }
+.verification[data-state="conflict"] { color: var(--loss); }
+.verification a { display: inline-block; padding: 5px 6px 5px 0; }
+.digest { padding: 12px; background: var(--paper); border: 1.5px solid var(--ink); }
+.digest ul { padding-left: 18px; font-size: 13px; }
+.digest li + li { margin-top: 12px; }
+.digest small { display: block; color: var(--muted); margin-top: 4px; }
 
 .tabbar {
   position: fixed;

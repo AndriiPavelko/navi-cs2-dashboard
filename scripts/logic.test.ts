@@ -46,6 +46,7 @@ const even = computeWinBand({
   naviMaps: [],
   oppMaps: [],
 });
+assert.ok(even);
 assert.equal(even.low, 47);
 assert.equal(even.high, 53);
 assert.ok(even.reasons.length <= 3);
@@ -58,8 +59,9 @@ const hot = computeWinBand({
   naviMaps: [{ map: "Mirage", wins: 10, losses: 0 }],
   oppMaps: [{ map: "Mirage", wins: 0, losses: 10 }],
 });
+assert.ok(hot);
 assert.ok(hot.low >= 15 && hot.high <= 85 && hot.high > hot.low);
-assert.equal(hot.high, 85);
+assert.ok(hot.high < 85, "small-sample effects are shrunk towards the base rate");
 
 const distance = computeDistanceBand({
   opponent: "G2 Esports",

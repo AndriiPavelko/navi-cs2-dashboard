@@ -5,12 +5,14 @@ import { berlinShort } from "@/lib/format";
 import { TEAM_LIST, TEAMS, sectionOf, teamFromPath, teamHref } from "@/lib/teams";
 import { usePathname } from "next/navigation";
 import { RefreshButton } from "./refresh-button";
+import type { SourceCheck } from "@/lib/sync/schedule";
 
-export function TopBar({ syncedAt }: { syncedAt: string | null }) {
+export function TopBar({ checks }: { checks: SourceCheck[] }) {
   const path = usePathname() || "/";
   const team = teamFromPath(path);
   const profile = TEAMS[team];
   const section = sectionOf(path);
+  const syncedAt = checks.find((check) => check.team === team && check.scope === "matches")?.succeededAt;
 
   return (
     <header className="top">
@@ -35,7 +37,7 @@ export function TopBar({ syncedAt }: { syncedAt: string | null }) {
         </nav>
       </div>
       <div className="top-side">
-        {syncedAt ? <p className="synced">синк {berlinShort(syncedAt)}</p> : <p className="synced">CS2 · 2026</p>}
+        {syncedAt ? <p className="synced">матчі · {berlinShort(syncedAt)}</p> : <p className="synced">CS2 · ще не перевірено</p>}
         <RefreshButton action={refreshDashboard} />
       </div>
     </header>
