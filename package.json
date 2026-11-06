@@ -11,7 +11,8 @@
     "backtest": "tsx scripts/backtest.ts",
     "check:sources": "tsx scripts/check-sources.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/logic.test.ts && tsx scripts/reliability.test.ts"
+    "test": "tsx scripts/logic.test.ts && tsx scripts/reliability.test.ts && tsx scripts/model.test.ts",
+    "backtest:maps": "tsx scripts/evaluate-series.ts"
   },
   "dependencies": {
     "fast-xml-parser": "^5.12.0",

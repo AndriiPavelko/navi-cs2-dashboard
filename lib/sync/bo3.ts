@@ -1,6 +1,7 @@
 import type { PlayerForm } from "../chance";
 import type { MatchStatus, ResultKind } from "../match-status";
 import { sourceFetch } from "./http";
+import type { MarketQuote } from "../series-model";
 
 const API = "https://api.bo3.gg/api/v1";
 
@@ -25,6 +26,7 @@ type Bo3Game = {
 };
 
 type Bo3Match = {
+  bet_updates?: {path?:string;provider?:string;team_1?:{team_id?:number;coeff?:number;active?:boolean};team_2?:{team_id?:number;coeff?:number;active?:boolean}}|null;
   id: number;
   slug: string;
   team1_id: number | null;
@@ -68,6 +70,8 @@ type GeneralStats = {
 };
 
 export type SideSeries = {
+  quotes?:MarketQuote[];
+  confirmedMaps?:string[];
   status?: MatchStatus;
   resultKind?: ResultKind;
   dataIssues?: string[];
@@ -166,6 +170,9 @@ function normalize(match: Bo3Match, teamId: number): SideSeries | null {
   const ownScore = ownIsFirst ? match.team1_score : match.team2_score;
   const oppScore = ownIsFirst ? match.team2_score : match.team1_score;
   return {
+    quotes: publicQuotes(match.bet_updates,teamId,opponentId,new Date().toISOString()),
+    confirmedMaps: !finished && match.bo_type===3 && maps.length===3 && maps.every(m=>m.ownWon==null) &&
+      new Set(maps.map(m=>m.name)).size===3 ? maps.map(m=>m.name):undefined,
     status,
     resultKind: finished ? match.status === "defwin" ? "walkover" : match.winner_team_id != null ? "played" : "unknown" : "unknown",
     dataIssues,
@@ -184,6 +191,14 @@ function normalize(match: Bo3Match, teamId: number): SideSeries | null {
     finished,
     maps,
   };
+}
+
+export function publicQuotes(bets:Bo3Match["bet_updates"],teamId:number,opponentId:number,observedAt:string):MarketQuote[]{
+  if(!bets?.provider || !bets.path?.startsWith("https://"))return [];
+  const sides=[bets.team_1,bets.team_2];
+  const own=sides.find(s=>s?.team_id===teamId),opp=sides.find(s=>s?.team_id===opponentId);
+  if(!own?.active || !opp?.active || typeof own.coeff!=="number" || typeof opp.coeff!=="number")return [];
+  return [{bookmaker:bets.provider,url:bets.path,at:observedAt,team:own.coeff,opponent:opp.coeff}];
 }
 
 async function matchesOf(teamId: number): Promise<SideSeries[]> {

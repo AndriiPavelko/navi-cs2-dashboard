@@ -15,6 +15,8 @@ import { usesBo3, primaryLabel } from "../sources";
 import { bandMissedSide } from "../chance";
 import { applyNames, fetchRoster, fetchSeason, opponentSlug, statWindow, type RosterPlayer, type SideSeries } from "./bo3";
 import { prepareTeam, type Prepared } from "./prepare";
+import { fetchPublicMarket } from "./market";
+import { createHash } from "node:crypto";
 
 export type SyncSummary = {
   matches: number; upcoming: number; roster: number; maps: number; posts: number; opponents: string[];
@@ -102,16 +104,22 @@ export async function writeMatches(client: PoolClient, team: TeamProfile, series
         JSON.stringify(item.naviPlayers),JSON.stringify(item.opponentPlayers),band?.low ?? null,band?.high ?? null,
         JSON.stringify(band?.reasons ?? []),item.status,item.resultKind,JSON.stringify(verification),checkedAt]);
       if (details) {
+        if(details.prediction && item.status==="scheduled" && item.at.getTime()>Date.parse(checkedAt) && verification.state!=="conflict"){
+          const {asOf,...stable}=details.prediction;
+          const hash=createHash("sha256").update(JSON.stringify(stable)).digest("hex");
+          await client.query(`INSERT INTO prediction_snapshots (team,series_id,input_hash,as_of,payload)
+            VALUES ($1,$2,$3,$4,$5::jsonb) ON CONFLICT DO NOTHING`,[team.id,item.id,hash,asOf,JSON.stringify(details.prediction)]);
+        }
         const stored = (await client.query<{old_source:string|null;old_low:number|null;old_high:number|null}>(
           "SELECT old_source,old_low,old_high FROM series WHERE team=$1 AND id=$2",[team.id,item.id])).rows[0];
         const keep = item.finished && stored?.old_source === "stored" && stored.old_low != null && stored.old_high != null;
         const oldMiss = keep && item.naviWon != null ? bandMissedSide(stored.old_low!,stored.old_high!,item.naviWon) : details.oldMiss;
-        await client.query(`UPDATE series SET maps_low=$3,maps_high=$4,maps_reasons=$5::jsonb,chain=$6,
+        await client.query(`UPDATE series SET maps_low=$3,maps_high=$4,maps_reasons=$5::jsonb,chain=$6,prediction=$14::jsonb,
           old_low=CASE WHEN $7 THEN old_low ELSE $8 END,old_high=CASE WHEN $7 THEN old_high ELSE $9 END,
           old_reasons=CASE WHEN $7 THEN old_reasons ELSE $10::jsonb END,old_source=CASE WHEN $7 THEN old_source ELSE $11 END,
           old_miss=$12,old_note=CASE WHEN $7 THEN old_note ELSE $13 END WHERE team=$1 AND id=$2`,
         [team.id,item.id,details.mapsLow,details.mapsHigh,JSON.stringify(details.mapReasons),details.chain,keep,
-          details.oldLow,details.oldHigh,JSON.stringify(details.oldReasons),details.oldSource,oldMiss,details.oldNote]);
+          details.oldLow,details.oldHigh,JSON.stringify(details.oldReasons),details.oldSource,oldMiss,details.oldNote,JSON.stringify(details.prediction??null)]);
       }
       // Upsert available maps; an incomplete response must not erase previously received scores.
       for (const map of item.maps) {
@@ -211,7 +219,7 @@ export async function runSync({ force = false }: { force?: boolean } = {}, suppl
               const own = await fetchSeason(team.bo3Id);
               const upcoming = own.filter((item) => !item.finished && (!item.status || item.status === "scheduled" || item.status === "running"));
               const recent = own.filter((item) => item.finished).sort((a,b) => b.at.localeCompare(a.at));
-              const needed = new Set([...upcoming,...(team.id === "navi" ? recent.slice(0,10):[])].map((item) => item.opponentId));
+              const needed = new Set([...upcoming,...recent.slice(0,10)].map((item) => item.opponentId));
               const opponents = new Map<number,SideSeries[]>();
               for (const id of needed) {
                 try { opponents.set(id,applyNames(await fetchSeason(id))); }
@@ -227,7 +235,13 @@ export async function runSync({ force = false }: { force?: boolean } = {}, suppl
                 try { rosters.set(item.opponentId,await fetchRoster(slug,window)); }
                 catch { warnings.push(`Статистика гравців ${item.opponentName} недоступна`); }
               }
-              prepared = prepareTeam({label:team.label,own:applyNames(own),opponents,rosters,windowLabel:window.label,replayLimit:team.id === "navi" ? 10:0});
+              let quotes=new Map();
+              try {quotes=await fetchPublicMarket();}catch{warnings.push("Безкоштовна стрічка коефіцієнтів недоступна; модель працює без букмекерів");}
+              const confirmations=(await client.query<{series_id:string;maps:string[];source_url:string;confirmed_at:Date}>(
+                "SELECT * FROM veto_confirmations WHERE series_id=ANY($1::text[])",[upcoming.map(m=>m.id)])).rows;
+              const confirmedMaps=new Map(confirmations.filter(c=>/^https:\/\//.test(c.source_url) && c.confirmed_at<=new Date() &&
+                Array.isArray(c.maps) && c.maps.length===3 && c.maps.every(m=>typeof m==="string")).map(c=>[c.series_id,c.maps]));
+              prepared = prepareTeam({label:team.label,own:applyNames(own),opponents,rosters,windowLabel:window.label,replayLimit:team.id === "navi" ? 10:0,quotes,confirmedMaps});
               series = prepared.map((item) => item.series);
               bundle = { matches:[],forms:{},wiki:"" };
             } else {

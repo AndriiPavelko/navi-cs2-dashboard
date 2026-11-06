@@ -3,8 +3,10 @@ import { computeDistanceBand, lengthFromScores } from "../distance";
 import type { StoredMap, StoredPlayer, StoredSeries } from "./normalize";
 import type { RosterPlayer, SideSeries } from "./bo3";
 import { computeWinBand, type MapSample, type RecordLine } from "../winband";
+import { predictSeries, type SeriesPrediction, type MarketQuote } from "../series-model";
 
 export type Prepared = {
+  prediction?:SeriesPrediction|null;
   series: StoredSeries;
   winLow: number | null;
   winHigh: number | null;
@@ -96,12 +98,17 @@ export function prepareTeam(input: {
   rosters: Map<number, RosterPlayer[]>;
   windowLabel: string;
   replayLimit?: number;
+  quotes?:Map<string,MarketQuote[]>;
+  confirmedMaps?:Map<string,string[]>;
 }): Prepared[] {
   const own = [...input.own].sort((a, b) => a.at.localeCompare(b.at));
   const finishedDesc = own.filter((item) => item.finished).sort((a, b) => b.at.localeCompare(a.at));
   const replayIds = new Set(finishedDesc.slice(0, input.replayLimit ?? 10).map((item) => item.id));
 
   return own.map((item) => {
+    const prediction=!item.finished && (!item.status || item.status==="scheduled") ? predictSeries({match:item,
+      history:[...own,...[...input.opponents.values()].flat()],asOf:new Date().toISOString(),
+      quotes:[...(item.quotes??[]),...(input.quotes?.get(item.id)??[])],confirmedMaps:input.confirmedMaps?.get(item.id)??item.confirmedMaps}) : null;
     const cutoff = new Date(Math.min(Date.parse(item.at),Date.now())).toISOString();
     const prior10 = before(own, cutoff).filter((row) => Date.parse(row.at)>=Date.parse(cutoff)-90*86400000).slice(0, 10);
     const prior8 = prior10.slice(0, 8);
@@ -233,7 +240,17 @@ export function prepareTeam(input: {
       maps,
     };
 
+    if(prediction){
+      const uncertainty=prediction.maps.some(m=>Math.min(m.ownSamples,m.opponentSamples)<5) ? 10:7;
+      winLow=Math.max(1,Math.round(prediction.team*100-uncertainty));
+      winHigh=Math.min(99,Math.round(prediction.team*100+uncertainty));
+      winReasons=prediction.reasons;
+      mapsLow=prediction.third==null ? null:Math.max(1,Math.round(prediction.third*100-uncertainty));
+      mapsHigh=prediction.third==null ? null:Math.min(99,Math.round(prediction.third*100+uncertainty));
+    }
+
     return {
+      prediction,
       series,
       winLow,
       winHigh,

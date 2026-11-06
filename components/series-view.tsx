@@ -59,12 +59,23 @@ export function Prediction({ series }: { series: SeriesVM }) {
   if (series.sourceMissing || series.verification.state === "conflict") return <p className="note">Прогноз очікує перевірки: у даних матчу є розбіжності.</p>;
   if (series.winLow == null || series.winHigh == null) return <p className="note">Прогноз ще не розрахований: потрібні дані про форму обох команд. Натисни «Оновити»; модель потребує щонайменше трьох придатних матчів на сторону.</p>;
   const own = TEAMS[series.team].label;
-  const percent = pairPercents(series.winLow,series.winHigh).team;
+  const model=series.prediction;
+  const percent = model ? Math.round(model.team*100):pairPercents(series.winLow,series.winHigh).team;
   const favorite = percent > 50 ? own : series.opponent;
   return <section className="band" aria-label="Прогноз матчу">
     <h3>Прогноз матчу</h3>
     <p className="lean">{Math.abs(percent-50)<5 ? "Близькі шанси — явного фаворита немає" : `Модель схиляється до перемоги ${favorite}`}</p>
     <ChancePoints series={series} />
+    {model ? <>
+      <p className="note">{model.stage==="confirmed" ? "Після підтвердженого veto":"До veto · сценарний прогноз"} · {model.version}</p>
+      {Object.keys(model.scores).length ? <><h4>Можливий рахунок BO3</h4><ul className="chances">{Object.entries(model.scores).map(([score,p])=><li key={score}><span>{own} {score} {series.opponent}</span><b>{Math.round(p*100)}%</b></li>)}</ul></>:null}
+      <details><summary>Оцінка на картах</summary><ul className="reasons">{model.maps.map(m=><li key={m.name}>{m.name}: {own} {Math.round(m.probability*100)}% · вибірка карт {m.ownSamples}/{m.opponentSamples}</li>)}</ul></details>
+      <p className="note">Власна оцінка: {Math.round(model.independent*100)}%. {model.market.note}.</p>
+      {model.market.probability!=null ? <p className="note">Оцінка ринку без маржі: {Math.round(model.market.probability*100)}%.</p>:null}
+      {model.market.sources?.map(s=><p className="note" key={s.url}><a href={s.url} target="_blank" rel="noreferrer">{s.name}</a>: {own} {s.teamOdds} / {series.opponent} {s.opponentOdds} · отримано {berlinLong(s.observedAt)}</p>)}
+      {model.warnings.map(w=><p className="note" key={w}>{w}</p>)}
+      {model.version==="map-elo-v1" ? <p className="note">Ретроперевірка v1: 47 BO3 на історії Liquipedia. Перевагу над базовими 50/50 не підтверджено; це ще не перевірена стратегія ставок.</p>:null}
+    </>:null}
     <p className="note">Діапазон оцінки для {own}: {series.winLow}–{series.winHigh}%. Це розкид евристичної моделі, не статистичний довірчий інтервал.</p>
     <p className="note">Розраховано {berlinLong(series.checkedAt)}. Нижче — форма команд, спільні суперники та доступна статистика гравців.</p>
   </section>;
@@ -93,10 +104,11 @@ export function Score({ series }: { series: SeriesVM }) {
 export function ChancePoints({ series }: { series: SeriesVM }) {
   if (series.winLow == null || series.winHigh == null) return null;
   const label = TEAMS[series.team].label;
-  const wins = pairPercents(series.winLow, series.winHigh);
+  const team=series.prediction ? Math.round(series.prediction.team*100):pairPercents(series.winLow, series.winHigh).team;
+  const wins = {team,opponent:100-team};
   const third =
     series.bestOf === 3 && series.mapsLow != null && series.mapsHigh != null
-      ? midPercent(series.mapsLow, series.mapsHigh)
+      ? series.prediction?.third!=null ? Math.round(series.prediction.third*100):midPercent(series.mapsLow, series.mapsHigh)
       : null;
   return (
     <ul className="chances">

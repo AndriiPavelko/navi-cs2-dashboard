@@ -1,5 +1,6 @@
 import type { MatchStatus, ResultKind } from "./match-status";
 import type { Verification } from "./verification";
+import type { SeriesPrediction } from "./series-model";
 
 export type PersonInMatch = {
   name: string;
@@ -22,6 +23,7 @@ export type MapVM = {
 };
 
 export type SeriesVM = {
+  prediction?:SeriesPrediction|null;
   status: MatchStatus;
   resultKind: ResultKind;
   sourceMissing: boolean;

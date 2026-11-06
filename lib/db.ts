@@ -102,6 +102,7 @@ ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_low INTEGER;
 ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_high INTEGER;
 ALTER TABLE series ADD COLUMN IF NOT EXISTS maps_reasons JSONB;
 ALTER TABLE series ADD COLUMN IF NOT EXISTS chain TEXT;
+ALTER TABLE series ADD COLUMN IF NOT EXISTS prediction JSONB;
 ALTER TABLE series ADD COLUMN IF NOT EXISTS old_low INTEGER;
 ALTER TABLE series ADD COLUMN IF NOT EXISTS old_high INTEGER;
 ALTER TABLE series ADD COLUMN IF NOT EXISTS old_reasons JSONB;
@@ -183,6 +184,22 @@ CREATE TABLE IF NOT EXISTS digests (
   mode TEXT NOT NULL,
   payload JSONB NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS prediction_snapshots (
+  team TEXT NOT NULL,
+  series_id TEXT NOT NULL,
+  input_hash TEXT NOT NULL,
+  as_of TIMESTAMPTZ NOT NULL,
+  payload JSONB NOT NULL,
+  PRIMARY KEY (team,series_id,input_hash)
+);
+
+CREATE TABLE IF NOT EXISTS veto_confirmations (
+  series_id TEXT PRIMARY KEY,
+  maps JSONB NOT NULL,
+  source_url TEXT NOT NULL,
+  confirmed_at TIMESTAMPTZ NOT NULL
 );
 `;
 

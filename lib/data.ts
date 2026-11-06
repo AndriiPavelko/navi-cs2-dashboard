@@ -9,6 +9,7 @@ import { deduplicatePosts } from "./sync/posts";
 import { usesBo3 } from "./sources";
 
 type SeriesRow = {
+  prediction:SeriesVM["prediction"];
   status: SeriesVM["status"];
   result_kind: SeriesVM["resultKind"];
   source_missing: boolean;
@@ -90,6 +91,7 @@ export const getAllSeries = cache(async (team: TeamId): Promise<SeriesVM[]> => {
     bySeries.set(map.series_id, list);
   }
   return series.map((row) => ({
+    prediction:row.prediction ?? null,
     status: row.status,
     resultKind: row.result_kind,
     sourceMissing: row.source_missing,
