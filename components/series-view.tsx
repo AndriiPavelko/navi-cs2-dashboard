@@ -8,6 +8,7 @@ import { winDisclaimer } from "@/lib/winband";
 import type { SeriesVM } from "@/lib/types";
 import { isUpcoming, statusLabel } from "@/lib/match-status";
 import { verificationLabel } from "@/lib/verification";
+import { displayScores } from "@/lib/series-model";
 
 export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; heading?: "h1" | "h2" }) {
   const pills = pillsFor(series);
@@ -68,7 +69,7 @@ export function Prediction({ series }: { series: SeriesVM }) {
     <ChancePoints series={series} />
     {model ? <>
       <p className="note">{model.stage==="confirmed" ? "Після підтвердженого veto":"До veto · сценарний прогноз"} · {model.version}</p>
-      {Object.keys(model.scores).length ? <><h4>Можливий рахунок BO3</h4><ul className="chances">{Object.entries(model.scores).map(([score,p])=><li key={score}><span>{own} {score} {series.opponent}</span><b>{Math.round(p*100)}%</b></li>)}</ul></>:null}
+      {Object.keys(model.scores).length ? <><h4>Можливий рахунок BO3</h4><ul className="chances">{displayScores(model.scores).map(([score,p])=><li key={score}><span>{own} {score} {series.opponent}</span><b>{p}%</b></li>)}</ul></>:null}
       <details><summary>Оцінка на картах</summary><ul className="reasons">{model.maps.map(m=><li key={m.name}>{m.name}: {own} {Math.round(m.probability*100)}% · вибірка карт {m.ownSamples}/{m.opponentSamples}</li>)}</ul></details>
       <p className="note">Власна оцінка: {Math.round(model.independent*100)}%. {model.market.note}.</p>
       {model.market.probability!=null ? <p className="note">Оцінка ринку без маржі: {Math.round(model.market.probability*100)}%.</p>:null}

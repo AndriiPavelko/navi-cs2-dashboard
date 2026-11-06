@@ -32,6 +32,17 @@ export function scoreDistribution(p:number[]){
   return {"2:0":a*b,"2:1":(a*(1-b)+(1-a)*b)*c,"1:2":(a*(1-b)+(1-a)*b)*(1-c),"0:2":(1-a)*(1-b)};
 }
 
+/** Stable score order and integer percentages that add to exactly 100. */
+export function displayScores(scores:Record<string,number>):Array<[string,number]>{
+  const keys=["2:0","2:1","1:2","0:2"];
+  const total=keys.reduce((sum,k)=>sum+(scores[k]??0),0);
+  if(!total)return [];
+  const rows=keys.map(key=>({key,raw:(scores[key]??0)*100/total,value:Math.floor((scores[key]??0)*100/total)}));
+  const rest=100-rows.reduce((sum,r)=>sum+r.value,0);
+  [...rows].sort((a,b)=>(b.raw-b.value)-(a.raw-a.value)).slice(0,rest).forEach(r=>r.value++);
+  return rows.map(r=>[r.key,r.value]);
+}
+
 /** Deterministic, chronological Elo over the collected match graph; no current rankings in historical features. */
 export function predictSeries(input:{match:SideSeries;history:SideSeries[];asOf:string;confirmedMaps?:string[];quotes?:MarketQuote[]}):SeriesPrediction|null{
   const {match}=input;

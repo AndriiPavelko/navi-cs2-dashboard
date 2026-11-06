@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { predictSeries,marketProbability,scoreDistribution,type MarketQuote } from "../lib/series-model";
+import { predictSeries,marketProbability,scoreDistribution,displayScores,type MarketQuote } from "../lib/series-model";
 import type { SideSeries } from "../lib/sync/bo3";
 import { publicQuotes } from "../lib/sync/bo3";
 
@@ -33,6 +33,8 @@ assert.ok(Math.abs(Object.values(adjusted.scores).reduce((a,b)=>a+b,0)-1)<1e-9);
 assert.equal(marketProbability([{...quote,at:"2026-11-05T00:00:00Z"}],at).probability,null);
 assert.equal(marketProbability([{...quote,team:NaN}],at).probability,null);
 assert.deepEqual(scoreDistribution([0.5,0.5,0.5]),{"2:0":0.25,"2:1":0.25,"1:2":0.25,"0:2":0.25});
+assert.equal(displayScores(p.scores).reduce((sum,[_,n])=>sum+n,0),100);
+assert.deepEqual(displayScores(p.scores).map(([key])=>key),["2:0","2:1","1:2","0:2"]);
 const bets={path:"https://thunderpick.io/match/1",provider:"thunderpick",team_1:{team_id:2,coeff:2.83,active:true},team_2:{team_id:1,coeff:1.37,active:true}};
 assert.equal(publicQuotes(bets,1,2,at)[0].team,1.37);
 assert.deepEqual(publicQuotes(bets,1,3,at),[]);
