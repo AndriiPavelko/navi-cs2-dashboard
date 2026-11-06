@@ -102,10 +102,11 @@ export function prepareTeam(input: {
   const replayIds = new Set(finishedDesc.slice(0, input.replayLimit ?? 10).map((item) => item.id));
 
   return own.map((item) => {
-    const prior10 = before(own, item.at).slice(0, 10);
+    const cutoff = new Date(Math.min(Date.parse(item.at),Date.now())).toISOString();
+    const prior10 = before(own, cutoff).filter((row) => Date.parse(row.at)>=Date.parse(cutoff)-90*86400000).slice(0, 10);
     const prior8 = prior10.slice(0, 8);
     const oppAll = input.opponents.get(item.opponentId) ?? [];
-    const oppPrior = before(oppAll, item.at);
+    const oppPrior = before(oppAll, cutoff).filter((row) => Date.parse(row.at)>=Date.parse(cutoff)-90*86400000);
     const h2h = own.filter(
       (other) => other.finished && other.at < item.at && other.at >= "2026-01-01" && other.opponentId === item.opponentId,
     );
@@ -152,8 +153,9 @@ export function prepareTeam(input: {
         windowLabel: input.windowLabel,
       });
       chain = chance.chain;
-      winLow = chance.low;
-      winHigh = chance.high;
+      const enoughHistory = prior8.length >= 3 && oppPrior.length >= 3;
+      winLow = enoughHistory ? chance.low : null;
+      winHigh = enoughHistory ? chance.high : null;
       winReasons = chance.reasons;
       oldLow = old?.low ?? null;
       oldHigh = old?.high ?? null;

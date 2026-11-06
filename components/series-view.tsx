@@ -35,6 +35,7 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
       ) : isUpcoming(series) ? (
         <>
           {series.status === "running" ? <p className="note">Матч триває. Рахунок очікує перевірки джерела.</p> : <Countdown iso={series.at} />}
+          {series.status === "scheduled" ? <Prediction series={series} /> : <p className="note">Передматчевий прогноз після початку не оновлюється як live-прогноз.</p>}
           {series.chain ? <MatchBrief chain={series.chain} /> : null}
           {series.winLow != null && series.winHigh != null ? (
             <div className="band"><p className="lean">Форма за останні 90 днів</p><ul className="reasons">{series.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>
@@ -51,6 +52,22 @@ export function SeriesHero({ series, heading = "h2" }: { series: SeriesVM; headi
       </div>
     </article>
   );
+}
+
+export function Prediction({ series }: { series: SeriesVM }) {
+  if (series.finished || series.status !== "scheduled") return null;
+  if (series.sourceMissing || series.verification.state === "conflict") return <p className="note">Прогноз очікує перевірки: у даних матчу є розбіжності.</p>;
+  if (series.winLow == null || series.winHigh == null) return <p className="note">Прогноз ще не розрахований: потрібні дані про форму обох команд. Натисни «Оновити»; модель потребує щонайменше трьох придатних матчів на сторону.</p>;
+  const own = TEAMS[series.team].label;
+  const percent = pairPercents(series.winLow,series.winHigh).team;
+  const favorite = percent > 50 ? own : series.opponent;
+  return <section className="band" aria-label="Прогноз матчу">
+    <h3>Прогноз матчу</h3>
+    <p className="lean">{Math.abs(percent-50)<5 ? "Близькі шанси — явного фаворита немає" : `Модель схиляється до перемоги ${favorite}`}</p>
+    <ChancePoints series={series} />
+    <p className="note">Діапазон оцінки для {own}: {series.winLow}–{series.winHigh}%. Це розкид евристичної моделі, не статистичний довірчий інтервал.</p>
+    <p className="note">Розраховано {berlinLong(series.checkedAt)}. Нижче — форма команд, спільні суперники та доступна статистика гравців.</p>
+  </section>;
 }
 
 export function Score({ series }: { series: SeriesVM }) {

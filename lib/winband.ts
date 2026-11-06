@@ -16,7 +16,7 @@ export type WinBand = {
   reasons: string[];
 };
 
-const DISCLAIMER = "Експериментальна модель. Точність і калібрування ще не підтверджені; відсотки прогнозу приховані.";
+const DISCLAIMER = "Прогноз — експериментальна оцінка за зібраними даними. Точність і калібрування не підтверджені; це не гарантія результату.";
 
 export function winDisclaimer(): string {
   return DISCLAIMER;

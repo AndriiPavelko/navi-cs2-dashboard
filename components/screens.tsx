@@ -24,6 +24,7 @@ export async function HomeScreen({ team }: { team: TeamId }) {
     <>
       <h1 className="hello">{profile.hello}</h1>
       <p className="hello-sub">{profile.season}</p>
+      {!upcoming.length ? <section className="hero empty-hero"><h2>Прогноз наступного матчу</h2><p>У джерелі ще немає підтвердженого наступного матчу {profile.label}. Без суперника прогноз перемоги не розраховується. Натисни «Оновити», щоб перевірити розклад.</p></section> : null}
       {next ? (
         <SeriesHero series={next} />
       ) : (
